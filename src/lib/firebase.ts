@@ -38,7 +38,38 @@ import {
 
 import { User, Subscription, ResumeData, PaymentDetails } from './types';
 import { v4 as uuidv4 } from 'uuid';
+// Add these imports at the top of src/lib/firebase.ts
+import { 
+  FacebookAuthProvider, 
+  GithubAuthProvider 
+} from 'firebase/auth';
 
+// Add these methods inside FirebaseAuthService class:
+
+async loginWithFacebook(): Promise<User> {
+  try {
+    const provider = new FacebookAuthProvider();
+    provider.addScope('email');
+    provider.addScope('public_profile');
+    const result = await signInWithPopup(auth, provider);
+    return await this.getOrCreateUser(result.user);
+  } catch (error: any) {
+    console.error('Facebook login error:', error);
+    throw new Error(getFbError(error));
+  }
+}
+
+async loginWithGithub(): Promise<User> {
+  try {
+    const provider = new GithubAuthProvider();
+    provider.addScope('user:email');
+    const result = await signInWithPopup(auth, provider);
+    return await this.getOrCreateUser(result.user);
+  } catch (error: any) {
+    console.error('GitHub login error:', error);
+    throw new Error(getFbError(error));
+  }
+}
 // ============================================
 // AUTHENTICATION SERVICES
 // ============================================
