@@ -24,8 +24,7 @@ class AIService {
 
   private constructor() {
     // Use the provided OpenAI API key
-    const apiKey = "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";
-    
+   const apiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
     if (!apiKey || apiKey.includes('your')) {
       console.warn('⚠️ OpenAI API key not configured properly. AI features will be limited.');
     }
