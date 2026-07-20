@@ -1,5 +1,5 @@
 // ============================================
-// LOGIN PAGE
+// LOGIN PAGE - Google, Facebook & GitHub
 // ============================================
 
 import React, { useState, useEffect } from 'react';
@@ -145,7 +145,11 @@ const Login: React.FC = () => {
               disabled={!!socialLoading}
               className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50"
             >
-              <FaFacebook className="w-5 h-5 text-[#1877F2]" />
+              {socialLoading === 'facebook' ? (
+                <Loading type="spinner" size="sm" />
+              ) : (
+                <FaFacebook className="w-5 h-5 text-[#1877F2]" />
+              )}
               Facebook
             </button>
             <button
@@ -153,7 +157,11 @@ const Login: React.FC = () => {
               disabled={!!socialLoading}
               className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50"
             >
-              <FaGithub className="w-5 h-5" />
+              {socialLoading === 'github' ? (
+                <Loading type="spinner" size="sm" />
+              ) : (
+                <FaGithub className="w-5 h-5" />
+              )}
               GitHub
             </button>
           </div>
