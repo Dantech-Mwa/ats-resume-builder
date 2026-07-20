@@ -1,16 +1,9 @@
 // ============================================
-// FIREBASE SERVICES
+// FIREBASE SERVICES - REALTIME DATABASE VERSION
 // ============================================
 
-import {
-  auth,
-  db,
-  storage,
-  googleProvider,
-  facebookProvider,
-  githubProvider,
-  getFirebaseErrorMessage,
-} from '../config/firebase';
+import { auth, realtimeDb, storage, googleProvider } from '../config/firebase';
+import { getFirebaseErrorMessage as getFbError } from '../config/firebase';
 
 import {
   createUserWithEmailAndPassword,
@@ -19,45 +12,31 @@ import {
   signOut,
   sendPasswordResetEmail,
   updateProfile,
-  updateEmail,
-  updatePassword,
-  deleteUser,
-  onAuthStateChanged,
   User as FirebaseUser,
-  UserCredential,
 } from 'firebase/auth';
 
 import {
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  deleteDoc,
-  collection,
-  addDoc,
+  ref,
+  set,
+  get,
+  update,
+  remove,
+  child,
+  push,
   query,
-  where,
-  getDocs,
-  orderBy,
-  limit,
-  serverTimestamp,
-  Timestamp,
-  DocumentData,
-  QueryDocumentSnapshot,
-  writeBatch,
-  runTransaction,
-} from 'firebase/firestore';
+  orderByChild,
+  equalTo,
+  DataSnapshot,
+} from 'firebase/database';
 
 import {
-  ref,
+  ref as storageRef,
   uploadBytes,
   getDownloadURL,
   deleteObject,
-  listAll,
-  UploadResult,
 } from 'firebase/storage';
 
-import { User, Subscription, ResumeData, PaymentDetails, Invoice } from './types';
+import { User, Subscription, ResumeData, PaymentDetails } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 // ============================================
@@ -74,24 +53,87 @@ class FirebaseAuthService {
     return FirebaseAuthService.instance;
   }
 
-  // Register with email and password
-  async registerWithEmail(
-    email: string,
-    password: string,
-    name: string
-  ): Promise<User> {
+  async registerWithEmail(email: string, password: string, name: string): Promise<User> {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
 
-      // Update profile with name
       await updateProfile(firebaseUser, { displayName: name });
 
-      // Create user document in Firestore
       const userData: User = {
         id: firebaseUser.uid,
         email: firebaseUser.email!,
         name: name,
+        avatar: '',
+        subscription: {
+          plan: 'trial',
+          startDate: new Date().toISOString(),
+          endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+          paymentMethod: 'none',
+          status: 'active',
+          amount: 1,
+          currency: 'USD',
+          autoRenew: false,
+        },
+        savedResumes: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+        preferences: {
+          theme: 'light',
+          language: 'en',
+          defaultTemplate: 'modern',
+          emailNotifications: true,
+          showAIAssistant: true,
+        },
+      };
+
+      // Save to Realtime Database
+      await set(ref(realtimeDb, 'users/' + firebaseUser.uid), userData);
+      return userData;
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      throw new Error(getFbError(error));
+    }
+  }
+
+  async loginWithEmail(email: string, password: string): Promise<User> {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      return await this.getOrCreateUser(userCredential.user);
+    } catch (error: any) {
+      console.error('Login error:', error);
+      throw new Error(getFbError(error));
+    }
+  }
+
+  async loginWithGoogle(): Promise<User> {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      return await this.getOrCreateUser(result.user);
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      throw new Error(getFbError(error));
+    }
+  }
+
+  private async getOrCreateUser(firebaseUser: FirebaseUser): Promise<User> {
+    const userRef = ref(realtimeDb, 'users/' + firebaseUser.uid);
+
+    try {
+      const snapshot = await get(userRef);
+
+      if (snapshot.exists()) {
+        // Update last login
+        await update(userRef, { lastLoginAt: new Date().toISOString() });
+        return snapshot.val() as User;
+      }
+
+      // Create new user
+      const userData: User = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email!,
+        name: firebaseUser.displayName || 'User',
         avatar: firebaseUser.photoURL || '',
         subscription: {
           plan: 'trial',
@@ -116,134 +158,33 @@ class FirebaseAuthService {
         },
       };
 
-      await setDoc(doc(db, 'users', firebaseUser.uid), userData);
+      await set(userRef, userData);
       return userData;
     } catch (error: any) {
-      throw new Error(getFirebaseErrorMessage(error));
+      console.error('getOrCreateUser error:', error);
+      throw new Error(getFbError(error));
     }
   }
 
-  // Login with email and password
-  async loginWithEmail(email: string, password: string): Promise<User> {
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-
-      if (!userDoc.exists()) {
-        throw new Error('User data not found');
-      }
-
-      const userData = userDoc.data() as User;
-
-      // Update last login time
-      await updateDoc(doc(db, 'users', userCredential.user.uid), {
-        lastLoginAt: new Date().toISOString(),
-      });
-
-      return userData;
-    } catch (error: any) {
-      throw new Error(getFirebaseErrorMessage(error));
-    }
-  }
-
-  // Login with Google
-  async loginWithGoogle(): Promise<User> {
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      return await this.handleSocialLogin(result);
-    } catch (error: any) {
-      throw new Error(getFirebaseErrorMessage(error));
-    }
-  }
-
-  // Login with Facebook
-  async loginWithFacebook(): Promise<User> {
-    try {
-      const result = await signInWithPopup(auth, facebookProvider);
-      return await this.handleSocialLogin(result);
-    } catch (error: any) {
-      throw new Error(getFirebaseErrorMessage(error));
-    }
-  }
-
-  // Login with GitHub
-  async loginWithGithub(): Promise<User> {
-    try {
-      const result = await signInWithPopup(auth, githubProvider);
-      return await this.handleSocialLogin(result);
-    } catch (error: any) {
-      throw new Error(getFirebaseErrorMessage(error));
-    }
-  }
-
-  // Handle social login
-  private async handleSocialLogin(userCredential: UserCredential): Promise<User> {
-    const firebaseUser = userCredential.user;
-    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-
-    if (userDoc.exists()) {
-      const userData = userDoc.data() as User;
-      await updateDoc(doc(db, 'users', firebaseUser.uid), {
-        lastLoginAt: new Date().toISOString(),
-      });
-      return userData;
-    }
-
-    // Create new user for first-time social login
-    const userData: User = {
-      id: firebaseUser.uid,
-      email: firebaseUser.email!,
-      name: firebaseUser.displayName || 'User',
-      avatar: firebaseUser.photoURL || '',
-      subscription: {
-        plan: 'trial',
-        startDate: new Date().toISOString(),
-        endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        paymentMethod: 'none',
-        status: 'active',
-        amount: 1,
-        currency: 'USD',
-        autoRenew: false,
-      },
-      savedResumes: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      lastLoginAt: new Date().toISOString(),
-      preferences: {
-        theme: 'light',
-        language: 'en',
-        defaultTemplate: 'modern',
-        emailNotifications: true,
-        showAIAssistant: true,
-      },
-    };
-
-    await setDoc(doc(db, 'users', firebaseUser.uid), userData);
-    return userData;
-  }
-
-  // Logout
   async logout(): Promise<void> {
     await signOut(auth);
   }
 
-  // Reset password
   async resetPassword(email: string): Promise<void> {
-    try {
-      await sendPasswordResetEmail(auth, email);
-    } catch (error: any) {
-      throw new Error(getFirebaseErrorMessage(error));
-    }
+    await sendPasswordResetEmail(auth, email);
   }
 
-  // Get current user
   async getCurrentUser(): Promise<User | null> {
     return new Promise((resolve) => {
-      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
         unsubscribe();
         if (firebaseUser) {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          resolve(userDoc.exists() ? (userDoc.data() as User) : null);
+          try {
+            const snapshot = await get(ref(realtimeDb, 'users/' + firebaseUser.uid));
+            resolve(snapshot.exists() ? (snapshot.val() as User) : null);
+          } catch {
+            resolve(null);
+          }
         } else {
           resolve(null);
         }
@@ -251,217 +192,205 @@ class FirebaseAuthService {
     });
   }
 
-  // Update user profile
   async updateUserProfile(userId: string, data: Partial<User>): Promise<void> {
-    await updateDoc(doc(db, 'users', userId), {
+    await update(ref(realtimeDb, 'users/' + userId), {
       ...data,
       updatedAt: new Date().toISOString(),
     });
   }
 
-  // Update user preferences
-  async updatePreferences(userId: string, preferences: Partial<User['preferences']>): Promise<void> {
-    await updateDoc(doc(db, 'users', userId), {
-      preferences: preferences,
+  async updateSubscription(userId: string, subscription: Subscription): Promise<void> {
+    await update(ref(realtimeDb, 'users/' + userId), {
+      subscription,
       updatedAt: new Date().toISOString(),
     });
   }
 }
 
 // ============================================
-// FIRESTORE SERVICES
+// REALTIME DATABASE SERVICES
 // ============================================
 
-class FirebaseFirestoreService {
-  private static instance: FirebaseFirestoreService;
+class FirebaseDatabaseService {
+  private static instance: FirebaseDatabaseService;
 
-  static getInstance(): FirebaseFirestoreService {
-    if (!FirebaseFirestoreService.instance) {
-      FirebaseFirestoreService.instance = new FirebaseFirestoreService();
+  static getInstance(): FirebaseDatabaseService {
+    if (!FirebaseDatabaseService.instance) {
+      FirebaseDatabaseService.instance = new FirebaseDatabaseService();
     }
-    return FirebaseFirestoreService.instance;
+    return FirebaseDatabaseService.instance;
   }
 
   // Save resume
   async saveResume(userId: string, resumeData: ResumeData): Promise<string> {
-    try {
-      const resumeId = resumeData.metadata.id || uuidv4();
-      const resumeRef = doc(db, 'resumes', resumeId);
-      
-      await setDoc(resumeRef, {
-        ...resumeData,
-        metadata: {
-          ...resumeData.metadata,
-          id: resumeId,
-          userId,
-          updatedAt: new Date().toISOString(),
-          version: (resumeData.metadata.version || 0) + 1,
-        },
-      });
+    const resumeId = resumeData.metadata.id || uuidv4();
+    const resumeWithId = {
+      ...resumeData,
+      metadata: {
+        ...resumeData.metadata,
+        id: resumeId,
+        userId,
+        updatedAt: new Date().toISOString(),
+        version: (resumeData.metadata.version || 0) + 1,
+      },
+    };
 
-      // Add to user's saved resumes
-      const userRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userRef);
-      
-      if (userDoc.exists()) {
-        const userData = userDoc.data() as User;
-        const savedResumes = userData.savedResumes || [];
-        
-        if (!savedResumes.includes(resumeId)) {
-          savedResumes.push(resumeId);
-          await updateDoc(userRef, { savedResumes });
-        }
-      }
+    // Save resume
+    await set(ref(realtimeDb, 'resumes/' + resumeId), resumeWithId);
 
-      return resumeId;
-    } catch (error: any) {
-      throw new Error(`Failed to save resume: ${error.message}`);
+    // Add to user's saved resumes list
+    const userSnapshot = await get(ref(realtimeDb, 'users/' + userId + '/savedResumes'));
+    const savedResumes: string[] = userSnapshot.val() || [];
+    
+    if (!savedResumes.includes(resumeId)) {
+      savedResumes.push(resumeId);
+      await update(ref(realtimeDb, 'users/' + userId), { savedResumes });
     }
+
+    return resumeId;
   }
 
   // Get resume
   async getResume(resumeId: string): Promise<ResumeData | null> {
-    try {
-      const resumeDoc = await getDoc(doc(db, 'resumes', resumeId));
-      return resumeDoc.exists() ? (resumeDoc.data() as ResumeData) : null;
-    } catch (error: any) {
-      throw new Error(`Failed to get resume: ${error.message}`);
-    }
+    const snapshot = await get(ref(realtimeDb, 'resumes/' + resumeId));
+    return snapshot.exists() ? (snapshot.val() as ResumeData) : null;
   }
 
   // Get all resumes for user
   async getUserResumes(userId: string): Promise<ResumeData[]> {
-    try {
-      const q = query(
-        collection(db, 'resumes'),
-        where('metadata.userId', '==', userId),
-        orderBy('metadata.updatedAt', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => doc.data() as ResumeData);
-    } catch (error: any) {
-      throw new Error(`Failed to get resumes: ${error.message}`);
+    // Get user's saved resume IDs
+    const userSnapshot = await get(ref(realtimeDb, 'users/' + userId + '/savedResumes'));
+    const savedResumeIds: string[] = userSnapshot.val() || [];
+
+    if (savedResumeIds.length === 0) return [];
+
+    // Fetch each resume
+    const resumes: ResumeData[] = [];
+    for (const resumeId of savedResumeIds) {
+      const snapshot = await get(ref(realtimeDb, 'resumes/' + resumeId));
+      if (snapshot.exists()) {
+        resumes.push(snapshot.val() as ResumeData);
+      }
     }
+
+    // Sort by updated date
+    resumes.sort((a, b) => 
+      new Date(b.metadata.updatedAt).getTime() - new Date(a.metadata.updatedAt).getTime()
+    );
+
+    return resumes;
   }
 
   // Delete resume
   async deleteResume(userId: string, resumeId: string): Promise<void> {
-    try {
-      await deleteDoc(doc(db, 'resumes', resumeId));
-      
-      // Remove from user's list
-      const userRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userRef);
-      
-      if (userDoc.exists()) {
-        const userData = userDoc.data() as User;
-        const savedResumes = userData.savedResumes.filter(id => id !== resumeId);
-        await updateDoc(userRef, { savedResumes });
-      }
-    } catch (error: any) {
-      throw new Error(`Failed to delete resume: ${error.message}`);
-    }
+    // Delete resume
+    await remove(ref(realtimeDb, 'resumes/' + resumeId));
+
+    // Remove from user's list
+    const userSnapshot = await get(ref(realtimeDb, 'users/' + userId + '/savedResumes'));
+    const savedResumes: string[] = userSnapshot.val() || [];
+    const updatedResumes = savedResumes.filter(id => id !== resumeId);
+    await update(ref(realtimeDb, 'users/' + userId), { savedResumes: updatedResumes });
   }
 
   // Duplicate resume
   async duplicateResume(userId: string, resumeId: string): Promise<string> {
-    try {
-      const originalResume = await this.getResume(resumeId);
-      if (!originalResume) throw new Error('Original resume not found');
+    const original = await this.getResume(resumeId);
+    if (!original) throw new Error('Original resume not found');
 
-      const newResume: ResumeData = {
-        ...originalResume,
-        metadata: {
-          ...originalResume.metadata,
-          id: uuidv4(),
-          title: `${originalResume.metadata.title} (Copy)`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          version: 1,
-        },
-      };
+    const newResume: ResumeData = {
+      ...original,
+      metadata: {
+        ...original.metadata,
+        id: uuidv4(),
+        title: `${original.metadata.title} (Copy)`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+    };
 
-      return await this.saveResume(userId, newResume);
-    } catch (error: any) {
-      throw new Error(`Failed to duplicate resume: ${error.message}`);
-    }
+    return await this.saveResume(userId, newResume);
   }
 
   // Save payment
   async savePayment(userId: string, paymentDetails: PaymentDetails): Promise<void> {
-    try {
-      const paymentRef = doc(db, 'payments', paymentDetails.transactionId);
-      await setDoc(paymentRef, {
-        userId,
-        ...paymentDetails,
-        createdAt: new Date().toISOString(),
-      });
+    const paymentId = paymentDetails.transactionId;
+    await set(ref(realtimeDb, 'payments/' + paymentId), {
+      userId,
+      ...paymentDetails,
+      createdAt: new Date().toISOString(),
+    });
 
-      // Update user subscription
-      if (paymentDetails.status === 'completed') {
-        const subscription = this.calculateSubscription(paymentDetails.planId);
-        await updateDoc(doc(db, 'users', userId), {
-          subscription,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-    } catch (error: any) {
-      throw new Error(`Failed to save payment: ${error.message}`);
+    // Update user subscription if payment completed
+    if (paymentDetails.status === 'completed') {
+      const subscription = this.calculateSubscription(paymentDetails.planId);
+      await update(ref(realtimeDb, 'users/' + userId), { subscription });
     }
   }
 
-  // Calculate subscription dates
+  // Get user payments
+  async getUserPayments(userId: string): Promise<PaymentDetails[]> {
+    const snapshot = await get(ref(realtimeDb, 'payments'));
+    if (!snapshot.exists()) return [];
+
+    const allPayments: Record<string, any> = snapshot.val();
+    const userPayments: PaymentDetails[] = [];
+
+    for (const [id, payment] of Object.entries(allPayments)) {
+      if (payment.userId === userId) {
+        userPayments.push({ ...payment, id } as PaymentDetails);
+      }
+    }
+
+    return userPayments.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
   private calculateSubscription(planId: string): Subscription {
     const now = new Date();
     let endDate: Date;
-    let plan: Subscription['plan'];
 
     switch (planId) {
       case 'trial':
         endDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-        plan = 'trial';
-        break;
+        return {
+          plan: 'trial',
+          startDate: now.toISOString(),
+          endDate: endDate.toISOString(),
+          paymentMethod: 'paypal',
+          status: 'active',
+          amount: 1,
+          currency: 'USD',
+          autoRenew: false,
+        };
       case 'monthly':
         endDate = new Date(now.setMonth(now.getMonth() + 1));
-        plan = 'monthly';
-        break;
+        return {
+          plan: 'monthly',
+          startDate: now.toISOString(),
+          endDate: endDate.toISOString(),
+          paymentMethod: 'paypal',
+          status: 'active',
+          amount: 5,
+          currency: 'USD',
+          autoRenew: true,
+        };
       case 'yearly':
         endDate = new Date(now.setFullYear(now.getFullYear() + 1));
-        plan = 'yearly';
-        break;
+        return {
+          plan: 'yearly',
+          startDate: now.toISOString(),
+          endDate: endDate.toISOString(),
+          paymentMethod: 'paypal',
+          status: 'active',
+          amount: 50,
+          currency: 'USD',
+          autoRenew: true,
+        };
       default:
         throw new Error('Invalid plan ID');
-    }
-
-    return {
-      plan,
-      startDate: new Date().toISOString(),
-      endDate: endDate.toISOString(),
-      paymentMethod: 'paypal',
-      status: 'active',
-      amount: plan === 'trial' ? 1 : plan === 'monthly' ? 5 : 50,
-      currency: 'USD',
-      autoRenew: plan !== 'trial',
-    };
-  }
-
-  // Get user invoices
-  async getUserInvoices(userId: string): Promise<Invoice[]> {
-    try {
-      const q = query(
-        collection(db, 'payments'),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as Invoice));
-    } catch (error: any) {
-      throw new Error(`Failed to get invoices: ${error.message}`);
     }
   }
 }
@@ -480,67 +409,23 @@ class FirebaseStorageService {
     return FirebaseStorageService.instance;
   }
 
-  // Upload file
-  async uploadFile(
-    userId: string,
-    file: File,
-    folder: string = 'resumes'
-  ): Promise<string> {
-    try {
-      const fileId = uuidv4();
-      const fileExtension = file.name.split('.').pop();
-      const fileName = `${folder}/${userId}/${fileId}.${fileExtension}`;
-      const storageRef = ref(storage, fileName);
+  async uploadFile(userId: string, file: File): Promise<string> {
+    const fileId = uuidv4();
+    const extension = file.name.split('.').pop();
+    const path = `resumes/${userId}/${fileId}.${extension}`;
+    const fileRef = storageRef(storage, path);
 
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(uploadResult.ref);
-
-      return downloadUrl;
-    } catch (error: any) {
-      throw new Error(`Failed to upload file: ${error.message}`);
-    }
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
   }
 
-  // Delete file
-  async deleteFile(filePath: string): Promise<void> {
-    try {
-      const storageRef = ref(storage, filePath);
-      await deleteObject(storageRef);
-    } catch (error: any) {
-      throw new Error(`Failed to delete file: ${error.message}`);
-    }
-  }
-
-  // Get download URL
-  async getFileUrl(filePath: string): Promise<string> {
-    try {
-      const storageRef = ref(storage, filePath);
-      return await getDownloadURL(storageRef);
-    } catch (error: any) {
-      throw new Error(`Failed to get file URL: ${error.message}`);
-    }
-  }
-
-  // List user files
-  async listUserFiles(userId: string, folder: string = 'resumes'): Promise<string[]> {
-    try {
-      const folderRef = ref(storage, `${folder}/${userId}`);
-      const result = await listAll(folderRef);
-      return result.items.map(item => item.fullPath);
-    } catch (error: any) {
-      throw new Error(`Failed to list files: ${error.message}`);
-    }
+  async deleteFile(path: string): Promise<void> {
+    const fileRef = storageRef(storage, path);
+    await deleteObject(fileRef);
   }
 }
 
-// Export singleton instances
+// Export singletons
 export const authService = FirebaseAuthService.getInstance();
-export const firestoreService = FirebaseFirestoreService.getInstance();
+export const databaseService = FirebaseDatabaseService.getInstance();
 export const storageService = FirebaseStorageService.getInstance();
-
-// Export everything
-export {
-  FirebaseAuthService,
-  FirebaseFirestoreService,
-  FirebaseStorageService,
-};
