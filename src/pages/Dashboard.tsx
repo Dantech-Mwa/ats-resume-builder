@@ -21,7 +21,7 @@ import {
   MdMoreVert,
 } from 'react-icons/md';
 import { useAuth, useResume } from '../store';
-import { firestoreService } from '../lib/firebase';
+import { databaseService } from '../lib/firebase';
 import { ResumeMetadata } from '../lib/types';
 import { formatDate, truncate } from '../lib/utils';
 import Loading from '../components/Loading';
