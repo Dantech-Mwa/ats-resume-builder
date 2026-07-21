@@ -13,6 +13,15 @@ import {
 const GROQ_API_KEY = process.env.REACT_APP_GROQ_API_KEY || '';
 const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY || '';
 
+// Utility helper to guarantee a clean 0-100 integer
+function safeNumber(val: any, fallback = 50): number {
+  const num = Number(val);
+  if (!Number.isFinite(num) || Number.isNaN(num)) {
+    return fallback;
+  }
+  return Math.min(100, Math.max(0, Math.round(num)));
+}
+
 // ============================================
 // INDUSTRY-SPECIFIC SCORING PROFILES
 // ============================================
@@ -114,9 +123,11 @@ export class FormatValidator {
       issues.push('Unusual Unicode characters detected - may disrupt character extraction.');
     }
 
+    const calculatedScore = Math.max(0, 100 - (issues.length * 15));
+
     return {
       issues,
-      score: Math.max(0, 100 - (issues.length * 15)),
+      score: safeNumber(calculatedScore, 100),
       recommendations: issues.map(i => `Fix formatting: ${i}`),
     };
   }
@@ -202,7 +213,7 @@ export class DeepSectionAnalyzer {
     return {
       name: section.name,
       present: true,
-      score: Math.max(0, score),
+      score: safeNumber(score, 50),
       wordCount: words.length,
       bulletPoints: bullets,
       metrics,
@@ -294,6 +305,7 @@ export class ScoreConsistencyEngine {
   }
 
   getConsistentScore(text: string, newScore: number): number {
+    const safeNewScore = safeNumber(newScore, 50);
     const hash = this.hashText(text);
 
     if (!this.scoreHistory.has(hash)) {
@@ -301,19 +313,22 @@ export class ScoreConsistencyEngine {
     }
 
     const history = this.scoreHistory.get(hash)!;
-    history.push(newScore);
+    history.push(safeNewScore);
 
     if (history.length > 5) history.shift();
     if (history.length === 1) return history[0];
 
-    const weightedSum = history.reduce((sum, score, i) => {
+    let weightedSum = 0;
+    let totalWeight = 0;
+
+    for (let i = 0; i < history.length; i++) {
       const weight = (i + 1) / history.length;
-      return sum + score * weight;
-    }, 0);
+      weightedSum += history[i] * weight;
+      totalWeight += weight;
+    }
 
-    const totalWeight = history.reduce((sum, _, i) => sum + (i + 1) / history.length, 0);
-
-    return Math.round(weightedSum / totalWeight);
+    if (totalWeight <= 0) return safeNewScore;
+    return safeNumber(weightedSum / totalWeight, safeNewScore);
   }
 
   getScoreTrend(text: string): 'improving' | 'declining' | 'stable' {
@@ -338,70 +353,21 @@ export class ScoreConsistencyEngine {
 
 class ATSScoringEngine {
   static scoreResume(text: string, industryKey?: string): ATSScore {
-  const normalizedText = text.toLowerCase();
-  const profile = industryKey ? INDUSTRY_PROFILES[industryKey] : null;
+    const normalizedText = (text || '').toLowerCase();
+    const profile = industryKey ? INDUSTRY_PROFILES[industryKey] : null;
 
-  const keywordScore = this.scoreKeywords(normalizedText, profile);
-  const formattingScore = this.scoreFormatting(text);
-  const contentScore = this.scoreContent(text);
-  const sectionScore = this.scoreSections(normalizedText, profile);
-  const verbScore = this.scoreActionVerbs(normalizedText);
-  const quantifiableScore = this.scoreQuantifiable(normalizedText);
-  const grammarScore = this.scoreGrammar(text);
-  const contactScore = this.scoreContact(text);
+    const keywordScore = safeNumber(this.scoreKeywords(normalizedText, profile));
+    const formattingScore = safeNumber(this.scoreFormatting(text));
+    const contentScore = safeNumber(this.scoreContent(text));
+    const sectionScore = safeNumber(this.scoreSections(normalizedText, profile));
+    const verbScore = safeNumber(this.scoreActionVerbs(normalizedText));
+    const quantifiableScore = safeNumber(this.scoreQuantifiable(normalizedText));
+    const grammarScore = safeNumber(this.scoreGrammar(text));
+    const contactScore = safeNumber(this.scoreContact(text));
 
-  // Define default component scores map
-  const scores: Record<string, number> = {
-    keywordOptimization: keywordScore,
-    formattingScore: formattingScore,
-    contentQuality: contentScore,
-    sectionCompleteness: sectionScore,
-    actionVerbs: verbScore,
-    quantifiableResults: quantifiableScore,
-    grammarAndSpelling: grammarScore,
-    contactInfoQuality: contactScore,
-    skillsRelevance: keywordScore,
-    overallReadability: contentScore,
-  };
-
-  // Base weights map
-  let weights: Record<string, number> = {
-    keywordOptimization: 0.20,
-    formattingScore: 0.10,
-    contentQuality: 0.10,
-    sectionCompleteness: 0.15,
-    actionVerbs: 0.10,
-    quantifiableResults: 0.10,
-    grammarAndSpelling: 0.05,
-    contactInfoQuality: 0.05,
-    skillsRelevance: 0.10,
-    overallReadability: 0.05,
-  };
-
-  // Safely apply overrides
-  if (profile?.weightOverrides) {
-    weights = { ...weights, ...profile.weightOverrides };
-  }
-
-  // Calculate sum of weights safely
-  const totalWeight = Object.values(weights).reduce((sum, w) => sum + (Number(w) || 0), 0);
-
-  // Compute weighted sum dynamic loop (prevents manual NaN additions)
-  let rawSum = 0;
-  for (const [key, weight] of Object.entries(weights)) {
-    const componentScore = scores[key] ?? 50; // Fallback to 50 if key missing
-    const normalizedWeight = totalWeight > 0 ? (weight / totalWeight) : 0;
-    rawSum += componentScore * normalizedWeight;
-  }
-
-  const overallCalculated = Math.round(rawSum);
-  const overall = isNaN(overallCalculated) ? 50 : Math.min(100, Math.max(0, overallCalculated));
-
-  return {
-    overall,
-    breakdown: {
+    const scores: Record<string, number> = {
       keywordOptimization: keywordScore,
-      formattingScore,
+      formattingScore: formattingScore,
       contentQuality: contentScore,
       sectionCompleteness: sectionScore,
       actionVerbs: verbScore,
@@ -410,13 +376,59 @@ class ATSScoringEngine {
       contactInfoQuality: contactScore,
       skillsRelevance: keywordScore,
       overallReadability: contentScore,
-    },
-    missingKeywords: this.getMissingKeywords(normalizedText, profile),
-    improvementTips: this.getImprovementTips(text, overall),
-    criticalIssues: this.getCriticalIssues(text),
-    analyzedAt: new Date().toISOString(),
-  };
-} 
+    };
+
+    let weights: Record<string, number> = {
+      keywordOptimization: 0.20,
+      formattingScore: 0.10,
+      contentQuality: 0.10,
+      sectionCompleteness: 0.15,
+      actionVerbs: 0.10,
+      quantifiableResults: 0.10,
+      grammarAndSpelling: 0.05,
+      contactInfoQuality: 0.05,
+      skillsRelevance: 0.10,
+      overallReadability: 0.05,
+    };
+
+    if (profile?.weightOverrides) {
+      weights = { ...weights, ...profile.weightOverrides };
+    }
+
+    let totalWeight = 0;
+    for (const val of Object.values(weights)) {
+      totalWeight += safeNumber(val * 100, 0) / 100;
+    }
+
+    let rawSum = 0;
+    for (const [key, weight] of Object.entries(weights)) {
+      const compScore = scores[key] ?? 50;
+      const normWeight = totalWeight > 0 ? (weight / totalWeight) : 0;
+      rawSum += compScore * normWeight;
+    }
+
+    const overall = safeNumber(rawSum, 50);
+
+    return {
+      overall,
+      breakdown: {
+        keywordOptimization: keywordScore,
+        formattingScore,
+        contentQuality: contentScore,
+        sectionCompleteness: sectionScore,
+        actionVerbs: verbScore,
+        quantifiableResults: quantifiableScore,
+        grammarAndSpelling: grammarScore,
+        contactInfoQuality: contactScore,
+        skillsRelevance: keywordScore,
+        overallReadability: contentScore,
+      },
+      missingKeywords: this.getMissingKeywords(normalizedText, profile),
+      improvementTips: this.getImprovementTips(text, overall),
+      criticalIssues: this.getCriticalIssues(text),
+      analyzedAt: new Date().toISOString(),
+    };
+  }
 
   private static scoreKeywords(text: string, profile?: IndustryProfile | null): number {
     let found = 0;
@@ -433,7 +445,7 @@ class ATSScoringEngine {
       }
     }
 
-    return Math.round((found / Math.max(1, total)) * 100);
+    return safeNumber((found / Math.max(1, total)) * 100);
   }
 
   private static scoreFormatting(text: string): number {
@@ -446,7 +458,7 @@ class ATSScoringEngine {
     if (/[^\x00-\x7F]/.test(text)) score -= 15;
     if (/[{}]/.test(text)) score -= 20;
 
-    return Math.min(100, Math.max(0, score));
+    return safeNumber(score);
   }
 
   private static scoreContent(text: string): number {
@@ -464,7 +476,7 @@ class ATSScoringEngine {
     const repeatedWords = Object.values(wordCount).filter(c => c > 10).length;
     if (repeatedWords > 5) score -= 10;
 
-    return Math.min(100, Math.max(0, score));
+    return safeNumber(score);
   }
 
   private static scoreSections(text: string, profile?: IndustryProfile | null): number {
@@ -480,7 +492,7 @@ class ATSScoringEngine {
       if (section.test(text)) found++;
     }
 
-    return Math.round((found / Math.max(1, requiredSections.length)) * 100);
+    return safeNumber((found / Math.max(1, requiredSections.length)) * 100);
   }
 
   private static scoreActionVerbs(text: string): number {
@@ -492,7 +504,7 @@ class ATSScoringEngine {
     }
 
     const density = (count / Math.max(1, words.length)) * 100;
-    return Math.min(100, Math.round(density * 20));
+    return safeNumber(density * 20);
   }
 
   private static scoreQuantifiable(text: string): number {
@@ -517,7 +529,7 @@ class ATSScoringEngine {
     if (/\s{2,}/.test(text)) score -= 5;
     if (/,,+/.test(text)) score -= 10;
 
-    return Math.min(100, Math.max(0, score));
+    return safeNumber(score);
   }
 
   private static scoreContact(text: string): number {
@@ -528,7 +540,7 @@ class ATSScoringEngine {
     if (/linkedin\.com/i.test(text)) score += 15;
     if (/github\.com/i.test(text)) score += 15;
 
-    return Math.min(100, score);
+    return safeNumber(score);
   }
 
   private static getMissingKeywords(text: string, profile?: IndustryProfile | null): string[] {
@@ -662,20 +674,47 @@ class AIService {
   }
 
   private normalizeScore(score: any): ATSScore {
-    if (!score || typeof score !== 'object') return score;
-
-    if (score.overall !== undefined && score.overall <= 1 && score.overall > 0) {
-      score.overall = Math.round(score.overall * 100);
+    if (!score || typeof score !== 'object') {
+      return {
+        overall: 50,
+        breakdown: {
+          keywordOptimization: 50,
+          formattingScore: 50,
+          contentQuality: 50,
+          sectionCompleteness: 50,
+          actionVerbs: 50,
+          quantifiableResults: 50,
+          grammarAndSpelling: 50,
+          contactInfoQuality: 50,
+          skillsRelevance: 50,
+          overallReadability: 50,
+        },
+        missingKeywords: [],
+        improvementTips: [],
+        criticalIssues: [],
+        analyzedAt: new Date().toISOString(),
+      };
     }
-    score.overall = Math.min(100, Math.max(0, Math.round(score.overall || 0)));
 
-    if (score.breakdown) {
+    score.overall = safeNumber(score.overall, 50);
+
+    if (score.breakdown && typeof score.breakdown === 'object') {
       for (const key of Object.keys(score.breakdown)) {
-        if (score.breakdown[key] <= 1 && score.breakdown[key] > 0) {
-          score.breakdown[key] = Math.round(score.breakdown[key] * 100);
-        }
-        score.breakdown[key] = Math.min(100, Math.max(0, Math.round(score.breakdown[key] || 0)));
+        score.breakdown[key] = safeNumber(score.breakdown[key], 50);
       }
+    } else {
+      score.breakdown = {
+        keywordOptimization: 50,
+        formattingScore: 50,
+        contentQuality: 50,
+        sectionCompleteness: 50,
+        actionVerbs: 50,
+        quantifiableResults: 50,
+        grammarAndSpelling: 50,
+        contactInfoQuality: 50,
+        skillsRelevance: 50,
+        overallReadability: 50,
+      };
     }
 
     return score;
@@ -687,13 +726,14 @@ class AIService {
     targetRole?: string,
     industryKey?: string
   ): Promise<ATSScore> {
-    const formatCheck = FormatValidator.validate(resumeText);
-    const localScore = ATSScoringEngine.scoreResume(resumeText, industryKey);
-    const sectionAnalyses = DeepSectionAnalyzer.analyzeAllSections(resumeText);
+    const text = resumeText || '';
+    const formatCheck = FormatValidator.validate(text);
+    const localScore = ATSScoringEngine.scoreResume(text, industryKey);
+    const sectionAnalyses = DeepSectionAnalyzer.analyzeAllSections(text);
 
     let benchmark: BenchmarkData | null = null;
     if (targetRole) {
-      benchmark = CompetitiveBenchmarker.compare(resumeText, targetRole);
+      benchmark = CompetitiveBenchmarker.compare(text, targetRole);
     }
 
     let aiScore: ATSScore | null = null;
@@ -706,7 +746,7 @@ ${benchmark ? `Benchmark: ${benchmark.avgScore}/100 average for ${benchmark.role
 Job description context: ${jobDescription || 'N/A'}
 
 Resume text:
-${resumeText}
+${text}
 
 Return JSON with overall, breakdown, missingKeywords, improvementTips, criticalIssues.`;
 
@@ -718,13 +758,20 @@ Return JSON with overall, breakdown, missingKeywords, improvementTips, criticalI
     }
 
     let rawOverall: number;
-    if (aiScore) {
-      rawOverall = Math.round((localScore.overall * 0.5) + (aiScore.overall * 0.3) + (formatCheck.score * 0.2));
+    const safeLocalScore = safeNumber(localScore.overall, 50);
+    const safeFormatScore = safeNumber(formatCheck.score, 50);
+
+    if (aiScore && aiScore.overall !== undefined) {
+      const safeAiScore = safeNumber(aiScore.overall, safeLocalScore);
+      rawOverall = Math.round((safeLocalScore * 0.5) + (safeAiScore * 0.3) + (safeFormatScore * 0.2));
     } else {
-      rawOverall = Math.round((localScore.overall * 0.7) + (formatCheck.score * 0.3));
+      rawOverall = Math.round((safeLocalScore * 0.7) + (safeFormatScore * 0.3));
     }
 
-    const finalOverall = this.consistencyEngine.getConsistentScore(resumeText, rawOverall);
+    const finalOverall = safeNumber(
+      this.consistencyEngine.getConsistentScore(text, rawOverall),
+      rawOverall
+    );
 
     return {
       overall: finalOverall,
