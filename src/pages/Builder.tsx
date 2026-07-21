@@ -1,5 +1,5 @@
 // ============================================
-// BUILDER PAGE - Fixed Upload & Auto-Populate
+// BUILDER PAGE - Complete with Debug Logs & Fixed
 // ============================================
 
 import React, { useEffect, useState } from 'react';
@@ -31,6 +31,8 @@ const Builder: React.FC = () => {
     createNewResume, 
     saveResume, 
     isDirty,
+    updateSection,
+    addItem,
     setCurrentResume 
   } = useResume();
   const { atsScore, setATSScore, setAIRecommendations, setAILoading, aiLoading } = useAI();
@@ -54,160 +56,237 @@ const Builder: React.FC = () => {
     }
   }, [isUpload]);
 
-  // Create a new resume if none exists
   useEffect(() => {
     if (!currentResume && pageLoaded) {
       createNewResume('My Resume');
     }
   }, [currentResume, pageLoaded, createNewResume]);
 
+  // ============================================
+  // FILE UPLOAD HANDLER
+  // ============================================
+
   const handleFileUpload = async (file: File) => {
-  setParsing(true);
-  setShowUpload(false);
+    setParsing(true);
+    setShowUpload(false);
 
-  try {
-    const parser = ResumeParser.getInstance();
-    const result = await parser.parseFile(file);
+    try {
+      const parser = ResumeParser.getInstance();
+      const result = await parser.parseFile(file);
 
-    if (!result.success) {
-      toast.error(result.errors.join('. '));
+      if (!result.success) {
+        toast.error(result.errors.join('. '));
+        setParsing(false);
+        return;
+      }
+
+      console.log('📦 ===== PARSER RESULT =====');
+      console.log('  Contact:', result.parsed.contact?.fullName, '|', result.parsed.contact?.email);
+      console.log('  Summary length:', result.parsed.summary?.content?.length || 0);
+      console.log('  Experience entries:', result.parsed.experience?.length || 0);
+      if (result.parsed.experience?.length) {
+        result.parsed.experience.forEach((exp: any, i: number) => {
+          console.log(`    [${i}] ${exp.position} | ${exp.company} | ${exp.startDate}-${exp.endDate} | Achievements: ${exp.achievements?.length || 0}`);
+        });
+      }
+      console.log('  Education entries:', result.parsed.education?.length || 0);
+      console.log('  Skills (tech):', result.parsed.skills?.technical?.length || 0);
+      console.log('  Skills (soft):', result.parsed.skills?.soft?.length || 0);
+      console.log('  Projects:', result.parsed.projects?.length || 0);
+      console.log('  Certifications:', result.parsed.certifications?.length || 0);
+      console.log('  Raw text length:', result.rawText?.length || 0);
+      console.log('  Raw text preview:', result.rawText?.substring(0, 300));
+      console.log('📦 ===== END PARSER RESULT =====');
+
+      toast.success('Resume parsed! Populating editor...');
+
+      // Build complete resume with parsed data
+      const parsedResume = {
+        ...currentResume!,
+        sections: {
+          ...currentResume!.sections,
+          contact: {
+            ...currentResume!.sections.contact,
+            ...(result.parsed.contact || {}),
+          },
+          summary: result.parsed.summary || currentResume!.sections.summary,
+          experience: result.parsed.experience?.length 
+            ? result.parsed.experience 
+            : currentResume!.sections.experience,
+          education: result.parsed.education?.length 
+            ? result.parsed.education 
+            : currentResume!.sections.education,
+          skills: result.parsed.skills 
+            ? { ...currentResume!.sections.skills, ...result.parsed.skills }
+            : currentResume!.sections.skills,
+          certifications: result.parsed.certifications?.length
+            ? result.parsed.certifications
+            : currentResume!.sections.certifications,
+          projects: result.parsed.projects?.length
+            ? result.parsed.projects
+            : currentResume!.sections.projects,
+          languages: result.parsed.languages?.length
+            ? result.parsed.languages
+            : currentResume!.sections.languages,
+        },
+        metadata: {
+          ...currentResume!.metadata,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      // Update the entire resume at once
+      setCurrentResume(parsedResume);
+
+      toast.success('Editor populated! Running AI analysis...');
+
+      // Score using RAW text (most accurate)
+      await analyzeResume(result.rawText);
+    } catch (error: any) {
+      toast.error('Failed to parse resume: ' + error.message);
+    } finally {
       setParsing(false);
-      return;
     }
+  };
 
-    toast.success('Resume parsed successfully! Analyzing...');
+  // ============================================
+  // AI ANALYSIS
+  // ============================================
 
-    // 🔍 DEBUG: Log what the parser extracted
-    console.log('📦 PARSER RESULT:');
-    console.log('  - Contact:', result.parsed.contact?.fullName, result.parsed.contact?.email);
-    console.log('  - Summary length:', result.parsed.summary?.content?.length || 0);
-    console.log('  - Experience entries:', result.parsed.experience?.length || 0);
-    if (result.parsed.experience?.length) {
-      result.parsed.experience.forEach((exp, i) => {
-        console.log(`    [${i}] ${exp.position} | ${exp.company} | ${exp.startDate}-${exp.endDate} | Achievements: ${exp.achievements?.length || 0}`);
-      });
-    }
-    console.log('  - Education entries:', result.parsed.education?.length || 0);
-    console.log('  - Skills (tech):', result.parsed.skills?.technical?.length || 0);
-    console.log('  - Skills (soft):', result.parsed.skills?.soft?.length || 0);
-    console.log('  - Projects:', result.parsed.projects?.length || 0);
-    console.log('  - Certifications:', result.parsed.certifications?.length || 0);
-    console.log('  - Raw text length:', result.rawText?.length || 0);
-    console.log('  - Raw text preview:', result.rawText?.substring(0, 300));
-
-    // Update resume sections
-    if (result.parsed.contact) updateSection('contact', result.parsed.contact);
-    if (result.parsed.summary) updateSection('summary', result.parsed.summary);
-    
-    // Clear existing items before adding parsed ones
-    if (result.parsed.experience?.length) {
-      result.parsed.experience.forEach(exp => addItem('experience', exp));
-    }
-    if (result.parsed.education?.length) {
-      result.parsed.education.forEach(edu => addItem('education', edu));
-    }
-    if (result.parsed.skills) updateSection('skills', result.parsed.skills);
-    if (result.parsed.projects?.length) {
-      result.parsed.projects.forEach(proj => addItem('projects', proj));
-    }
-    if (result.parsed.certifications?.length) {
-      result.parsed.certifications.forEach(cert => addItem('certifications', cert));
-    }
-
-    // 🔍 Use RAW TEXT for scoring (not editor text)
-    await analyzeResume(result.rawText);
-  } catch (error: any) {
-    toast.error('Failed to parse resume: ' + error.message);
-  } finally {
-    setParsing(false);
-  }
-};
   const analyzeResume = async (resumeText: string) => {
-    // 🔍 DEBUG
-  console.log('🔬 TEXT SENT TO SCORER:');
-  console.log('  Length:', resumeText?.length || 0);
-  console.log('  Has "EXPERIENCE":', /experience/i.test(resumeText));
-  console.log('  Has "EDUCATION":', /education/i.test(resumeText));
-  console.log('  Has "SKILLS":', /skills/i.test(resumeText));
-  console.log('  Has bullets (•):', /•/.test(resumeText));
-  console.log('  Has dates (20XX):', /\b20\d{2}\b/.test(resumeText));
-  console.log('  Has metrics (%):', /\d+%/.test(resumeText));
-  console.log('  First 500 chars:', resumeText?.substring(0, 500));
-  
+    console.log('🔬 ===== TEXT SENT TO SCORER =====');
+    console.log('  Length:', resumeText?.length || 0);
+    console.log('  Has EXPERIENCE:', /experience/i.test(resumeText));
+    console.log('  Has EDUCATION:', /education/i.test(resumeText));
+    console.log('  Has SKILLS:', /skills/i.test(resumeText));
+    console.log('  Has bullets (•):', /•/.test(resumeText));
+    console.log('  Has dates (20XX):', /\b20\d{2}\b/.test(resumeText));
+    console.log('  Has metrics (%):', /\d+%/.test(resumeText));
+    console.log('  Has email (@):', /@/.test(resumeText));
+    console.log('  First 500 chars:', resumeText?.substring(0, 500));
+    console.log('🔬 ===== END TEXT SAMPLE =====');
+
     setAILoading(true);
     try {
       const aiService = AIService.getInstance();
       
       const score = await aiService.analyzeATS(resumeText);
+      console.log('✅ SCORE RESULT:', score.overall, '/100');
+      console.log('   Breakdown:', JSON.stringify(score.breakdown));
+      
       setATSScore(score);
 
       const recommendations = await aiService.getRecommendations(resumeText, score);
-      setAIRecommendations(recommendations);
+      console.log('✅ RECOMMENDATIONS:', recommendations?.length || 0);
+      
+      setAIRecommendations(recommendations || []);
 
-      toast.success(`ATS Score: ${score.overall}/100 - ${recommendations.length} recommendations`);
+      toast.success(`ATS Score: ${score.overall}/100 - ${recommendations?.length || 0} recommendations`);
     } catch (error: any) {
-      console.error('AI Analysis error:', error);
-      // Don't show error toast - the resume is still populated
+      console.error('❌ AI Analysis error:', error);
     } finally {
       setAILoading(false);
     }
   };
 
+  // ============================================
+  // RE-ANALYZE (from editor content)
+  // ============================================
+
   const handleReAnalyze = async () => {
     if (!currentResume) return;
     
-    let resumeText = '';
     const sections = currentResume.sections;
-    
+    let resumeText = '';
+
+    // CONTACT
     if (sections.contact.fullName) {
       resumeText += `${sections.contact.fullName}\n`;
-      resumeText += `${sections.contact.email} | ${sections.contact.phone}\n\n`;
+      resumeText += `${sections.contact.email || ''} | ${sections.contact.phone || ''}\n`;
+      if (sections.contact.location) resumeText += `${sections.contact.location}\n`;
+      if (sections.contact.linkedIn) resumeText += `${sections.contact.linkedIn}\n`;
+      resumeText += '\n';
     }
+
+    // SUMMARY
     if (sections.summary?.content) {
       resumeText += `PROFESSIONAL SUMMARY\n${sections.summary.content}\n\n`;
     }
+
+    // EXPERIENCE
     if (sections.experience?.length) {
-      resumeText += 'EXPERIENCE\n';
+      resumeText += 'PROFESSIONAL EXPERIENCE\n\n';
       sections.experience.forEach((exp: any) => {
-        resumeText += `${exp.position} at ${exp.company}\n`;
-        resumeText += `${exp.startDate || ''} - ${exp.current ? 'Present' : exp.endDate || ''}\n`;
-        resumeText += `${exp.description || ''}\n`;
-        if (exp.achievements) {
+        resumeText += `${exp.position || ''} | ${exp.startDate || ''} - ${exp.current ? 'Present' : exp.endDate || ''}\n`;
+        resumeText += `${exp.company || ''}\n`;
+        if (exp.location) resumeText += `${exp.location}\n`;
+        if (exp.description) resumeText += `${exp.description}\n`;
+        if (exp.achievements?.length) {
           exp.achievements.forEach((a: string) => {
-            if (a.trim()) resumeText += `• ${a}\n`;
+            if (a.trim()) resumeText += `• ${a.trim()}\n`;
           });
         }
         resumeText += '\n';
       });
     }
+
+    // EDUCATION
     if (sections.education?.length) {
-      resumeText += 'EDUCATION\n';
+      resumeText += 'EDUCATION\n\n';
       sections.education.forEach((edu: any) => {
-        resumeText += `${edu.degree || ''} in ${edu.field || ''}\n`;
-        resumeText += `${edu.institution || ''}\n`;
-        resumeText += `${edu.startDate || ''} - ${edu.endDate || ''}\n\n`;
+        resumeText += `${edu.degree || ''}`;
+        if (edu.field) resumeText += ` in ${edu.field}`;
+        resumeText += ` | ${edu.institution || ''}\n`;
+        if (edu.startDate) resumeText += `${edu.startDate} - ${edu.endDate || 'Present'}\n`;
+        if (edu.gpa) resumeText += `GPA: ${edu.gpa}\n`;
+        resumeText += '\n';
       });
     }
+
+    // SKILLS
     if (sections.skills) {
-      const allSkills = [
-        ...(sections.skills.technical || []).map((s: any) => s.name),
-        ...(sections.skills.soft || []).map((s: any) => s.name),
-        ...(sections.skills.tools || []).map((s: any) => s.name),
-      ].filter(Boolean);
-      if (allSkills.length) {
-        resumeText += `SKILLS\n${allSkills.join(', ')}\n\n`;
+      const techSkills = (sections.skills.technical || []).map((s: any) => s.name).filter(Boolean);
+      const softSkills = (sections.skills.soft || []).map((s: any) => s.name).filter(Boolean);
+      const toolSkills = (sections.skills.tools || []).map((s: any) => s.name).filter(Boolean);
+      
+      if (techSkills.length || softSkills.length || toolSkills.length) {
+        resumeText += 'SKILLS\n';
+        if (techSkills.length) resumeText += `Technical: ${techSkills.join(', ')}\n`;
+        if (softSkills.length) resumeText += `Soft Skills: ${softSkills.join(', ')}\n`;
+        if (toolSkills.length) resumeText += `Tools: ${toolSkills.join(', ')}\n`;
+        resumeText += '\n';
       }
     }
+
+    // PROJECTS
+    if (sections.projects?.length) {
+      resumeText += 'PROJECTS\n\n';
+      sections.projects.forEach((proj: any) => {
+        resumeText += `${proj.name || ''}\n`;
+        if (proj.description) resumeText += `${proj.description}\n`;
+        if (proj.technologies?.length) resumeText += `Technologies: ${proj.technologies.join(', ')}\n`;
+        resumeText += '\n';
+      });
+    }
+
+    // CERTIFICATIONS
     if (sections.certifications?.length) {
       resumeText += 'CERTIFICATIONS\n';
       sections.certifications.forEach((cert: any) => {
-        resumeText += `• ${cert.name} - ${cert.issuer}\n`;
+        resumeText += `• ${cert.name || ''}`;
+        if (cert.issuer) resumeText += ` - ${cert.issuer}`;
+        resumeText += '\n';
       });
       resumeText += '\n';
     }
 
+    console.log('🔄 RE-ANALYZE from editor - text length:', resumeText.length);
     await analyzeResume(resumeText);
   };
+
+  // ============================================
+  // EXPORT
+  // ============================================
 
   const handleExport = async (format: string) => {
     if (!currentResume) {
@@ -236,6 +315,10 @@ const Builder: React.FC = () => {
     }
   };
 
+  // ============================================
+  // RENDER
+  // ============================================
+
   if (!pageLoaded || parsing) {
     return (
       <Loading 
@@ -248,10 +331,11 @@ const Builder: React.FC = () => {
 
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col">
+      {/* Top Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-600 hover:text-gray-900">
-            ← Back to Dashboard
+            ← Back
           </button>
           <div className="w-px h-5 bg-gray-200" />
           <h1 className="text-sm font-semibold text-gray-900">
@@ -286,18 +370,21 @@ const Builder: React.FC = () => {
         </div>
       </div>
 
+      {/* Editor */}
       <div className="flex-1 overflow-hidden">
         <ResumeEditor onExport={handleExport} />
       </div>
 
+      {/* Upload Modal */}
       <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload Your Resume" size="md">
         <FileUpload 
           onFileSelect={handleFileUpload} 
           label="Upload Resume" 
-          description="Upload your existing resume (PDF, DOCX, or TXT). We'll extract the information and populate the editor automatically." 
+          description="Upload PDF, DOCX, or TXT. We'll extract all information and populate the editor." 
         />
       </Modal>
 
+      {/* Export Modal */}
       <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Download Resume" size="sm">
         <div className="space-y-3">
           {[
