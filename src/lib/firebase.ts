@@ -13,6 +13,8 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   User as FirebaseUser,
+  FacebookAuthProvider,
+  GithubAuthProvider,
 } from 'firebase/auth';
 
 import {
@@ -21,12 +23,6 @@ import {
   get,
   update,
   remove,
-  child,
-  push,
-  query,
-  orderByChild,
-  equalTo,
-  DataSnapshot,
 } from 'firebase/database';
 
 import {
@@ -38,38 +34,7 @@ import {
 
 import { User, Subscription, ResumeData, PaymentDetails } from './types';
 import { v4 as uuidv4 } from 'uuid';
-// Add these imports at the top of src/lib/firebase.ts
-import { 
-  FacebookAuthProvider, 
-  GithubAuthProvider 
-} from 'firebase/auth';
 
-// Add these methods inside FirebaseAuthService class:
-
-async loginWithFacebook(): Promise<User> {
-  try {
-    const provider = new FacebookAuthProvider();
-    provider.addScope('email');
-    provider.addScope('public_profile');
-    const result = await signInWithPopup(auth, provider);
-    return await this.getOrCreateUser(result.user);
-  } catch (error: any) {
-    console.error('Facebook login error:', error);
-    throw new Error(getFbError(error));
-  }
-}
-
-async loginWithGithub(): Promise<User> {
-  try {
-    const provider = new GithubAuthProvider();
-    provider.addScope('user:email');
-    const result = await signInWithPopup(auth, provider);
-    return await this.getOrCreateUser(result.user);
-  } catch (error: any) {
-    console.error('GitHub login error:', error);
-    throw new Error(getFbError(error));
-  }
-}
 // ============================================
 // AUTHENTICATION SERVICES
 // ============================================
@@ -119,7 +84,6 @@ class FirebaseAuthService {
         },
       };
 
-      // Save to Realtime Database
       await set(ref(realtimeDb, 'users/' + firebaseUser.uid), userData);
       return userData;
     } catch (error: any) {
@@ -148,6 +112,31 @@ class FirebaseAuthService {
     }
   }
 
+  async loginWithFacebook(): Promise<User> {
+    try {
+      const provider = new FacebookAuthProvider();
+      provider.addScope('email');
+      provider.addScope('public_profile');
+      const result = await signInWithPopup(auth, provider);
+      return await this.getOrCreateUser(result.user);
+    } catch (error: any) {
+      console.error('Facebook login error:', error);
+      throw new Error(getFbError(error));
+    }
+  }
+
+  async loginWithGithub(): Promise<User> {
+    try {
+      const provider = new GithubAuthProvider();
+      provider.addScope('user:email');
+      const result = await signInWithPopup(auth, provider);
+      return await this.getOrCreateUser(result.user);
+    } catch (error: any) {
+      console.error('GitHub login error:', error);
+      throw new Error(getFbError(error));
+    }
+  }
+
   private async getOrCreateUser(firebaseUser: FirebaseUser): Promise<User> {
     const userRef = ref(realtimeDb, 'users/' + firebaseUser.uid);
 
@@ -155,12 +144,10 @@ class FirebaseAuthService {
       const snapshot = await get(userRef);
 
       if (snapshot.exists()) {
-        // Update last login
         await update(userRef, { lastLoginAt: new Date().toISOString() });
         return snapshot.val() as User;
       }
 
-      // Create new user
       const userData: User = {
         id: firebaseUser.uid,
         email: firebaseUser.email!,
@@ -252,7 +239,6 @@ class FirebaseDatabaseService {
     return FirebaseDatabaseService.instance;
   }
 
-  // Save resume
   async saveResume(userId: string, resumeData: ResumeData): Promise<string> {
     const resumeId = resumeData.metadata.id || uuidv4();
     const resumeWithId = {
@@ -266,10 +252,8 @@ class FirebaseDatabaseService {
       },
     };
 
-    // Save resume
     await set(ref(realtimeDb, 'resumes/' + resumeId), resumeWithId);
 
-    // Add to user's saved resumes list
     const userSnapshot = await get(ref(realtimeDb, 'users/' + userId + '/savedResumes'));
     const savedResumes: string[] = userSnapshot.val() || [];
     
@@ -281,21 +265,17 @@ class FirebaseDatabaseService {
     return resumeId;
   }
 
-  // Get resume
   async getResume(resumeId: string): Promise<ResumeData | null> {
     const snapshot = await get(ref(realtimeDb, 'resumes/' + resumeId));
     return snapshot.exists() ? (snapshot.val() as ResumeData) : null;
   }
 
-  // Get all resumes for user
   async getUserResumes(userId: string): Promise<ResumeData[]> {
-    // Get user's saved resume IDs
     const userSnapshot = await get(ref(realtimeDb, 'users/' + userId + '/savedResumes'));
     const savedResumeIds: string[] = userSnapshot.val() || [];
 
     if (savedResumeIds.length === 0) return [];
 
-    // Fetch each resume
     const resumes: ResumeData[] = [];
     for (const resumeId of savedResumeIds) {
       const snapshot = await get(ref(realtimeDb, 'resumes/' + resumeId));
@@ -304,7 +284,6 @@ class FirebaseDatabaseService {
       }
     }
 
-    // Sort by updated date
     resumes.sort((a, b) => 
       new Date(b.metadata.updatedAt).getTime() - new Date(a.metadata.updatedAt).getTime()
     );
@@ -312,19 +291,15 @@ class FirebaseDatabaseService {
     return resumes;
   }
 
-  // Delete resume
   async deleteResume(userId: string, resumeId: string): Promise<void> {
-    // Delete resume
     await remove(ref(realtimeDb, 'resumes/' + resumeId));
 
-    // Remove from user's list
     const userSnapshot = await get(ref(realtimeDb, 'users/' + userId + '/savedResumes'));
     const savedResumes: string[] = userSnapshot.val() || [];
     const updatedResumes = savedResumes.filter(id => id !== resumeId);
     await update(ref(realtimeDb, 'users/' + userId), { savedResumes: updatedResumes });
   }
 
-  // Duplicate resume
   async duplicateResume(userId: string, resumeId: string): Promise<string> {
     const original = await this.getResume(resumeId);
     if (!original) throw new Error('Original resume not found');
@@ -344,7 +319,6 @@ class FirebaseDatabaseService {
     return await this.saveResume(userId, newResume);
   }
 
-  // Save payment
   async savePayment(userId: string, paymentDetails: PaymentDetails): Promise<void> {
     const paymentId = paymentDetails.transactionId;
     await set(ref(realtimeDb, 'payments/' + paymentId), {
@@ -353,14 +327,12 @@ class FirebaseDatabaseService {
       createdAt: new Date().toISOString(),
     });
 
-    // Update user subscription if payment completed
     if (paymentDetails.status === 'completed') {
       const subscription = this.calculateSubscription(paymentDetails.planId);
       await update(ref(realtimeDb, 'users/' + userId), { subscription });
     }
   }
 
-  // Get user payments
   async getUserPayments(userId: string): Promise<PaymentDetails[]> {
     const snapshot = await get(ref(realtimeDb, 'payments'));
     if (!snapshot.exists()) return [];
@@ -387,38 +359,20 @@ class FirebaseDatabaseService {
       case 'trial':
         endDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
         return {
-          plan: 'trial',
-          startDate: now.toISOString(),
-          endDate: endDate.toISOString(),
-          paymentMethod: 'paypal',
-          status: 'active',
-          amount: 1,
-          currency: 'USD',
-          autoRenew: false,
+          plan: 'trial', startDate: now.toISOString(), endDate: endDate.toISOString(),
+          paymentMethod: 'paypal', status: 'active', amount: 1, currency: 'USD', autoRenew: false,
         };
       case 'monthly':
         endDate = new Date(now.setMonth(now.getMonth() + 1));
         return {
-          plan: 'monthly',
-          startDate: now.toISOString(),
-          endDate: endDate.toISOString(),
-          paymentMethod: 'paypal',
-          status: 'active',
-          amount: 5,
-          currency: 'USD',
-          autoRenew: true,
+          plan: 'monthly', startDate: now.toISOString(), endDate: endDate.toISOString(),
+          paymentMethod: 'paypal', status: 'active', amount: 5, currency: 'USD', autoRenew: true,
         };
       case 'yearly':
         endDate = new Date(now.setFullYear(now.getFullYear() + 1));
         return {
-          plan: 'yearly',
-          startDate: now.toISOString(),
-          endDate: endDate.toISOString(),
-          paymentMethod: 'paypal',
-          status: 'active',
-          amount: 50,
-          currency: 'USD',
-          autoRenew: true,
+          plan: 'yearly', startDate: now.toISOString(), endDate: endDate.toISOString(),
+          paymentMethod: 'paypal', status: 'active', amount: 50, currency: 'USD', autoRenew: true,
         };
       default:
         throw new Error('Invalid plan ID');
