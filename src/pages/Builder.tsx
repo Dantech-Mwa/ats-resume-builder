@@ -62,81 +62,78 @@ const Builder: React.FC = () => {
   }, [currentResume, pageLoaded, createNewResume]);
 
   const handleFileUpload = async (file: File) => {
-    setParsing(true);
-    setShowUpload(false);
+  setParsing(true);
+  setShowUpload(false);
 
-    try {
-      const parser = ResumeParser.getInstance();
-      const result = await parser.parseFile(file);
+  try {
+    const parser = ResumeParser.getInstance();
+    const result = await parser.parseFile(file);
 
-      if (!result.success) {
-        toast.error(result.errors.join('. '));
-        setParsing(false);
-        return;
-      }
-
-      toast.success('Resume parsed successfully! Populating editor...');
-
-      // Build complete resume data with parsed sections
-      const parsedResume = {
-        ...currentResume!,
-        sections: {
-          ...currentResume!.sections,
-          // Contact info
-          contact: {
-            ...currentResume!.sections.contact,
-            ...(result.parsed.contact || {}),
-          },
-          // Summary
-          summary: result.parsed.summary || currentResume!.sections.summary,
-          // Experience - replace with parsed
-          experience: result.parsed.experience && result.parsed.experience.length > 0 
-            ? result.parsed.experience 
-            : currentResume!.sections.experience,
-          // Education - replace with parsed
-          education: result.parsed.education && result.parsed.education.length > 0 
-            ? result.parsed.education 
-            : currentResume!.sections.education,
-          // Skills
-          skills: result.parsed.skills 
-            ? { ...currentResume!.sections.skills, ...result.parsed.skills }
-            : currentResume!.sections.skills,
-          // Certifications
-          certifications: result.parsed.certifications && result.parsed.certifications.length > 0
-            ? result.parsed.certifications
-            : currentResume!.sections.certifications,
-          // Projects
-          projects: result.parsed.projects && result.parsed.projects.length > 0
-            ? result.parsed.projects
-            : currentResume!.sections.projects,
-          // Languages
-          languages: result.parsed.languages && result.parsed.languages.length > 0
-            ? result.parsed.languages
-            : currentResume!.sections.languages,
-        },
-        metadata: {
-          ...currentResume!.metadata,
-          updatedAt: new Date().toISOString(),
-        },
-      };
-
-      // Update the resume in the store - this triggers the preview to update
-      setCurrentResume(parsedResume);
-
-      toast.success('Resume populated! Running AI analysis...');
-
-      // Run AI analysis on the raw text
-      await analyzeResume(result.rawText);
-
-      toast.success('Analysis complete! Edit your resume to improve your score.');
-    } catch (error: any) {
-      toast.error('Failed to parse resume: ' + error.message);
-    } finally {
+    if (!result.success) {
+      toast.error(result.errors.join('. '));
       setParsing(false);
+      return;
     }
-  };
 
+    toast.success('Resume parsed successfully! Analyzing...');
+
+    // 🔍 DEBUG: Log what the parser extracted
+    console.log('📦 PARSER RESULT:');
+    console.log('  - Contact:', result.parsed.contact?.fullName, result.parsed.contact?.email);
+    console.log('  - Summary length:', result.parsed.summary?.content?.length || 0);
+    console.log('  - Experience entries:', result.parsed.experience?.length || 0);
+    if (result.parsed.experience?.length) {
+      result.parsed.experience.forEach((exp, i) => {
+        console.log(`    [${i}] ${exp.position} | ${exp.company} | ${exp.startDate}-${exp.endDate} | Achievements: ${exp.achievements?.length || 0}`);
+      });
+    }
+    console.log('  - Education entries:', result.parsed.education?.length || 0);
+    console.log('  - Skills (tech):', result.parsed.skills?.technical?.length || 0);
+    console.log('  - Skills (soft):', result.parsed.skills?.soft?.length || 0);
+    console.log('  - Projects:', result.parsed.projects?.length || 0);
+    console.log('  - Certifications:', result.parsed.certifications?.length || 0);
+    console.log('  - Raw text length:', result.rawText?.length || 0);
+    console.log('  - Raw text preview:', result.rawText?.substring(0, 300));
+
+    // Update resume sections
+    if (result.parsed.contact) updateSection('contact', result.parsed.contact);
+    if (result.parsed.summary) updateSection('summary', result.parsed.summary);
+    
+    // Clear existing items before adding parsed ones
+    if (result.parsed.experience?.length) {
+      result.parsed.experience.forEach(exp => addItem('experience', exp));
+    }
+    if (result.parsed.education?.length) {
+      result.parsed.education.forEach(edu => addItem('education', edu));
+    }
+    if (result.parsed.skills) updateSection('skills', result.parsed.skills);
+    if (result.parsed.projects?.length) {
+      result.parsed.projects.forEach(proj => addItem('projects', proj));
+    }
+    if (result.parsed.certifications?.length) {
+      result.parsed.certifications.forEach(cert => addItem('certifications', cert));
+    }
+
+    // 🔍 Use RAW TEXT for scoring (not editor text)
+    await analyzeResume(result.rawText);
+  } catch (error: any) {
+    toast.error('Failed to parse resume: ' + error.message);
+  } finally {
+    setParsing(false);
+  }
+};
   const analyzeResume = async (resumeText: string) => {
+    // 🔍 DEBUG
+  console.log('🔬 TEXT SENT TO SCORER:');
+  console.log('  Length:', resumeText?.length || 0);
+  console.log('  Has "EXPERIENCE":', /experience/i.test(resumeText));
+  console.log('  Has "EDUCATION":', /education/i.test(resumeText));
+  console.log('  Has "SKILLS":', /skills/i.test(resumeText));
+  console.log('  Has bullets (•):', /•/.test(resumeText));
+  console.log('  Has dates (20XX):', /\b20\d{2}\b/.test(resumeText));
+  console.log('  Has metrics (%):', /\d+%/.test(resumeText));
+  console.log('  First 500 chars:', resumeText?.substring(0, 500));
+  
     setAILoading(true);
     try {
       const aiService = AIService.getInstance();
