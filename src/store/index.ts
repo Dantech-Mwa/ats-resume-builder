@@ -820,7 +820,7 @@ const useStore = create<AppStore>()(
 export default useStore;
 
 // ============================================
-// SELECTOR HOOKS
+// SELECTOR HOOKS - ALL FIXED
 // ============================================
 
 export const useAuth = () => {
@@ -841,6 +841,7 @@ export const useResume = () => {
   const savedResumes = useStore((s) => s.savedResumes);
   const loading = useStore((s) => s.resumeLoading);
   const isDirty = useStore((s) => s.isDirty);
+  const setCurrentResume = useStore((s) => s.setCurrentResume);
   const createNewResume = useStore((s) => s.createNewResume);
   const updateSection = useStore((s) => s.updateSection);
   const addItem = useStore((s) => s.addItem);
@@ -848,13 +849,23 @@ export const useResume = () => {
   const removeItem = useStore((s) => s.removeItem);
   const saveResume = useStore((s) => s.saveResume);
   const deleteResume = useStore((s) => s.deleteResume);
-  return { currentResume, savedResumes, loading, isDirty, createNewResume, updateSection, addItem, updateItem, removeItem, saveResume, deleteResume };
+  const loadResume = useStore((s) => s.loadResume);
+  const setResumeLoading = useStore((s) => s.setResumeLoading);
+  const setResumeError = useStore((s) => s.setResumeError);
+  const setDirty = useStore((s) => s.setDirty);
+  return {
+    currentResume, savedResumes, loading, isDirty,
+    setCurrentResume, createNewResume, updateSection,
+    addItem, updateItem, removeItem, saveResume, deleteResume,
+    loadResume, setResumeLoading, setResumeError, setDirty,
+  };
 };
 
 export const useAI = () => {
   const atsScore = useStore((s) => s.atsScore);
   const recommendations = useStore((s) => s.aiRecommendations);
   const loading = useStore((s) => s.aiLoading);
+  const aiLoading = useStore((s) => s.aiLoading);
   const error = useStore((s) => s.aiError);
   const chatMessages = useStore((s) => s.chatMessages);
   const jobDescription = useStore((s) => s.jobDescription);
@@ -867,7 +878,12 @@ export const useAI = () => {
   const addChatMessage = useStore((s) => s.addChatMessage);
   const clearChat = useStore((s) => s.clearChat);
   const setJobDescription = useStore((s) => s.setJobDescription);
-  return { atsScore, recommendations, loading, error, chatMessages, jobDescription, setATSScore, setRecommendations, setAIRecommendations, setAILoading, applyRecommendation, dismissRecommendation, addChatMessage, clearChat, setJobDescription };
+  return {
+    atsScore, recommendations, loading, aiLoading, error,
+    chatMessages, jobDescription, setATSScore, setRecommendations,
+    setAIRecommendations, setAILoading, applyRecommendation,
+    dismissRecommendation, addChatMessage, clearChat, setJobDescription,
+  };
 };
 
 export const useUI = () => {
