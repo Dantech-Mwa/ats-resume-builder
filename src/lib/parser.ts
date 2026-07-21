@@ -205,13 +205,19 @@ class ResumeParser {
       const matchedHeader = sectionHeaders.find(h => h.pattern.test(line) && line.length < 60);
 
       if (matchedHeader) {
-        if (currentBlock.trim()) {
-          blocks.push({
-            type: this.determineBlockType(blocks.length === 0 ? 'contact' : 'unknown', lines.slice(blockStart, i)),
-            content: currentBlock.trim(),
-            confidence: 0.8,
-          });
-        }
+       if (currentBlock.trim()) {
+  const blockType = this.determineBlockType(
+    blocks.length === 0 ? 'contact' : 'unknown', 
+    lines.slice(blockStart, i)
+  ) as ParsedBlock['type'];
+  
+  blocks.push({
+    type: blockType,
+    content: currentBlock.trim(),
+    confidence: 0.8,
+  });
+}
+
         currentBlock = line + '\n';
         blockStart = i;
       } else {
@@ -231,20 +237,30 @@ class ResumeParser {
     return this.reclassifyBlocks(blocks, lines);
   }
 
-  private determineBlockType(defaultType: string, blockLines: string[]): string {
-    const text = blockLines.join(' ').toLowerCase();
-    
-    if (blockLines.length <= 5 && (
-      text.includes('@') || 
-      text.includes('phone') || 
-      text.includes('linkedin') ||
-      text.match(/[\d\s\+\-\(\)]{10,}/)
-    )) return 'contact';
+private determineBlockType(defaultType: string, blockLines: string[]): ParsedBlock['type'] {
+  const text = blockLines.join(' ').toLowerCase();
+  
+  if (blockLines.length <= 5 && (
+    text.includes('@') || 
+    text.includes('phone') || 
+    text.includes('linkedin') ||
+    text.match(/[\d\s\+\-\(\)]{10,}/)
+  )) return 'contact';
 
-    if (text.includes('@') && text.includes('.com')) return 'contact';
-    
-    return defaultType;
-  }
+  if (text.includes('@') && text.includes('.com')) return 'contact';
+  
+  // Must return a valid type
+  if (defaultType === 'contact') return 'contact';
+  if (defaultType === 'summary') return 'summary';
+  if (defaultType === 'experience') return 'experience';
+  if (defaultType === 'education') return 'education';
+  if (defaultType === 'skills') return 'skills';
+  if (defaultType === 'certification') return 'certification';
+  if (defaultType === 'project') return 'project';
+  if (defaultType === 'language') return 'language';
+  
+  return 'unknown';
+}
 
   private reclassifyBlocks(blocks: ParsedBlock[], allLines: string[]): ParsedBlock[] {
     const firstBlock = blocks[0];
