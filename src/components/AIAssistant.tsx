@@ -13,7 +13,7 @@ import {
   JobDescription,
   JobMatchResult,
   AIChatMessage,
-} from './types';
+} from '../lib/types';
 
 // API Keys - Try to get from env, fall back to hardcoded
 const OPENAI_API_KEY = process.env.REACT_APP_OPENAI_API_KEY || '';
