@@ -403,4 +403,4 @@ Return JSON array of recommendations with: id, section, field, current, suggeste
   }
 }
 
-export default AIService;
+export default AIAssistant;
