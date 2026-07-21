@@ -20,6 +20,7 @@ import { useResume, useAI, useUndoRedo, useUI } from '../store';
 import DynamicSection from './DynamicSection';
 import ATSScore from './ATSScore';
 import AIAssistant from './AIAssistant';
+import AIService from '../lib/ai';
 import TemplateSelector from './TemplateSelector';
 import ResumePreview from './ResumePreview';
 import FileUpload from './FileUpload';
@@ -88,67 +89,72 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ onExport }) => {
   };
 
   const handleAnalyze = async () => {
-    if (!currentResume) return;
+  if (!currentResume) return;
+  
+  setAILoading(true);
+  try {
+    // Import and call REAL AI service
+    const AIService = (await import('../lib/ai')).default;
+    const aiService = AIService.getInstance();
     
-    setAILoading(true);
-    try {
-      // Simulate AI analysis (in production, call AI service)
-      const resumeText = JSON.stringify(currentResume.sections);
-      
-      // This would be a real API call
-      // const score = await aiService.analyzeATS(resumeText);
-      // const recommendations = await aiService.getRecommendations(resumeText, score);
-      
-      // For now, simulate with mock data
-      setTimeout(() => {
-        setATSScore({
-          overall: 78,
-          breakdown: {
-            keywordOptimization: 75,
-            formattingScore: 85,
-            contentQuality: 72,
-            sectionCompleteness: completeness,
-            actionVerbs: 70,
-            quantifiableResults: 65,
-            grammarAndSpelling: 88,
-            contactInfoQuality: 90,
-            skillsRelevance: 80,
-            overallReadability: 82,
-          },
-          missingKeywords: ['Agile', 'Project Management', 'Cross-functional'],
-          improvementTips: [
-            'Add more quantifiable achievements with specific metrics',
-            'Include industry-specific keywords like "Agile" and "Scrum"',
-            'Strengthen your professional summary with more impact',
-            'Add a certifications section if applicable',
-          ],
-          criticalIssues: [],
-          analyzedAt: new Date().toISOString(),
-        });
-
-        setAIRecommendations([
-          {
-            id: 'rec-1',
-            section: 'summary',
-            field: 'content',
-            current: currentResume.sections.summary?.content || '',
-            suggested: 'Results-driven professional with 5+ years of experience...',
-            reason: 'A stronger opening will capture recruiter attention',
-            priority: 'High',
-            type: 'improvement',
-            applied: false,
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-        
-        toast.success('ATS analysis complete!');
-      }, 2000);
-    } catch (error) {
-      toast.error('Failed to analyze resume');
-    } finally {
-      setAILoading(false);
+    // Build resume text from sections
+    const sections = currentResume.sections;
+    let resumeText = '';
+    
+    if (sections.contact.fullName) {
+      resumeText += `${sections.contact.fullName}\n`;
+      resumeText += `${sections.contact.email} | ${sections.contact.phone}\n\n`;
     }
-  };
+    if (sections.summary?.content) {
+      resumeText += `SUMMARY: ${sections.summary.content}\n\n`;
+    }
+    if (sections.experience?.length) {
+      resumeText += 'EXPERIENCE:\n';
+      sections.experience.forEach(exp => {
+        resumeText += `${exp.position} at ${exp.company} (${exp.startDate} - ${exp.current ? 'Present' : exp.endDate})\n`;
+        resumeText += `${exp.description}\n`;
+        exp.achievements?.forEach(a => resumeText += `- ${a}\n`);
+        resumeText += '\n';
+      });
+    }
+    if (sections.education?.length) {
+      resumeText += 'EDUCATION:\n';
+      sections.education.forEach(edu => {
+        resumeText += `${edu.degree} - ${edu.institution}\n`;
+      });
+      resumeText += '\n';
+    }
+    if (sections.skills) {
+      const skills = [
+        ...(sections.skills.technical || []).map(s => s.name),
+        ...(sections.skills.soft || []).map(s => s.name),
+        ...(sections.skills.tools || []).map(s => s.name),
+      ];
+      resumeText += `SKILLS: ${skills.join(', ')}\n`;
+    }
+
+    // Call real AI
+    const score = await aiService.analyzeATS(resumeText);
+    setATSScore(score);
+    
+    // Get recommendations
+    const recommendations = await aiService.getRecommendations(resumeText, score);
+    setAIRecommendations(recommendations);
+    
+    toast.success(`ATS Score: ${score.overall}/100 with ${recommendations.length} recommendations!`);
+  } catch (error: any) {
+    console.error('Analysis error:', error);
+    toast.error('Analysis failed. Using local analysis instead.');
+    
+    // Fallback to local analysis
+    const AIService = (await import('../lib/ai')).default;
+    const aiService = AIService.getInstance();
+    const score = await aiService.analyzeATS(''); // Will use fallback
+    setATSScore(score);
+  } finally {
+    setAILoading(false);
+  }
+};
 
   return (
     <div className="flex h-full">
