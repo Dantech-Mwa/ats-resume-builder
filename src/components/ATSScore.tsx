@@ -4,11 +4,22 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { MdInfo, MdWarning, MdCheckCircle, MdTrendingUp } from 'react-icons/md';
+import { ATSScore as ATSScoreType } from '../lib/types';
+import { getScoreColor, getScoreLabel, getScoreIcon } from '../lib/utils';
+
+// Sanitization helper to guarantee valid numbers for SVG rendering
+const safeVal = (val: any, fallback = 0): number => {
+  const num = Number(val);
+  return Number.isFinite(num) ? Math.min(100, Math.max(0, Math.round(num))) : fallback;
+};
+
 const CircularScore = ({ value, color }: { value: number; color: string }) => {
+  const numericValue = safeVal(value, 0);
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (value / 100) * circumference;
-  
+  const offset = circumference - (numericValue / 100) * circumference;
+
   return (
     <svg width="100" height="100" viewBox="0 0 100 100">
       <circle
@@ -19,7 +30,7 @@ const CircularScore = ({ value, color }: { value: number; color: string }) => {
         cx="50" cy="50" r={radius}
         fill="none" stroke={color} strokeWidth="8"
         strokeDasharray={circumference}
-        strokeDashoffset={offset}
+        strokeDashoffset={Number.isFinite(offset) ? offset : circumference}
         strokeLinecap="round"
         transform="rotate(-90 50 50)"
         style={{ transition: 'stroke-dashoffset 1s ease' }}
@@ -29,14 +40,11 @@ const CircularScore = ({ value, color }: { value: number; color: string }) => {
         textAnchor="middle" dominantBaseline="central"
         fill={color} fontSize="24" fontWeight="bold"
       >
-        {value}
+        {numericValue}
       </text>
     </svg>
   );
 };
-import { MdInfo, MdWarning, MdCheckCircle, MdTrendingUp } from 'react-icons/md';
-import { ATSScore as ATSScoreType } from '../lib/types';
-import { getScoreColor, getScoreLabel, getScoreIcon } from '../lib/utils';
 
 interface ATSScoreProps {
   score: ATSScoreType | null;
@@ -88,8 +96,13 @@ const ATSScore: React.FC<ATSScoreProps> = ({
 
   if (!score) return null;
 
-  const overallScore = score.overall;
+  // Ensure overallScore is strictly a finite number
+  const overallScore = safeVal(score.overall, 0);
   const scoreColor = overallScore >= 80 ? '#10B981' : overallScore >= 60 ? '#F59E0B' : '#EF4444';
+
+  const formattedDate = score.analyzedAt
+    ? new Date(score.analyzedAt).toLocaleString()
+    : new Date().toLocaleString();
 
   if (compact) {
     return (
@@ -99,7 +112,7 @@ const ATSScore: React.FC<ATSScoreProps> = ({
         </div>
         <div>
           <p className="text-sm font-semibold text-gray-900">
-            {getScoreLabel(overallScore)}
+            {getScoreLabel ? getScoreLabel(overallScore) : 'Compatibility Score'}
           </p>
           <p className="text-xs text-gray-500">
             ATS Compatibility Score
@@ -121,17 +134,17 @@ const ATSScore: React.FC<ATSScoreProps> = ({
           <h3 className="text-lg font-semibold text-gray-900">
             ATS Compatibility Score
           </h3>
-          <span className="text-2xl">{getScoreIcon(overallScore)}</span>
+          <span className="text-2xl">{getScoreIcon ? getScoreIcon(overallScore) : '📊'}</span>
         </div>
 
         {/* Score Circle */}
         <div className="flex items-center gap-6">
           <div className="w-24 h-24">
-          <CircularScore value={overallScore} color={scoreColor} />
+            <CircularScore value={overallScore} color={scoreColor} />
           </div>
           <div>
             <p className="text-xl font-bold text-gray-900">
-              {getScoreLabel(overallScore)}
+              {getScoreLabel ? getScoreLabel(overallScore) : `${overallScore}/100`}
             </p>
             <p className="text-sm text-gray-500 mt-1">
               {overallScore >= 80
@@ -141,42 +154,47 @@ const ATSScore: React.FC<ATSScoreProps> = ({
                 : 'Your resume needs optimization for ATS.'}
             </p>
             <p className="text-xs text-gray-400 mt-2">
-              Analyzed: {new Date(score.analyzedAt).toLocaleString()}
+              Analyzed: {formattedDate}
             </p>
           </div>
         </div>
       </div>
 
       {/* Score Breakdown */}
-      <div className="p-6">
-        <h4 className="text-sm font-semibold text-gray-900 mb-4">
-          Score Breakdown
-        </h4>
-        <div className="space-y-3">
-          {Object.entries(score.breakdown).map(([key, value]) => (
-            <div key={key} className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 capitalize">
-                  {key.replace(/([A-Z])/g, ' $1').trim()}
-                </span>
-                <span className={`text-sm font-medium ${getScoreColor(value)}`}>
-                  {value}/100
-                </span>
-              </div>
-              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${value}%` }}
-                  transition={{ duration: 1, delay: 0.2 }}
-                  className={`h-full rounded-full ${
-                    value >= 80 ? 'bg-green-500' : value >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                  }`}
-                />
-              </div>
-            </div>
-          ))}
+      {score.breakdown && typeof score.breakdown === 'object' && (
+        <div className="p-6">
+          <h4 className="text-sm font-semibold text-gray-900 mb-4">
+            Score Breakdown
+          </h4>
+          <div className="space-y-3">
+            {Object.entries(score.breakdown).map(([key, rawVal]) => {
+              const val = safeVal(rawVal, 0);
+              return (
+                <div key={key} className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 capitalize">
+                      {key.replace(/([A-Z])/g, ' $1').trim()}
+                    </span>
+                    <span className={`text-sm font-medium ${getScoreColor ? getScoreColor(val) : ''}`}>
+                      {val}/100
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${val}%` }}
+                      transition={{ duration: 1, delay: 0.2 }}
+                      className={`h-full rounded-full ${
+                        val >= 80 ? 'bg-green-500' : val >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Missing Keywords */}
       {score.missingKeywords && score.missingKeywords.length > 0 && (
