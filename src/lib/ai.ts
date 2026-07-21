@@ -17,8 +17,8 @@ import {
 
 // API Keys - From environment or hardcoded fallbacks
 const OPENAI_API_KEY = process.env.REACT_APP_OPENAI_API_KEY || '';
-const GEMINI_API_KEY = 'AIzaSyBSxKSyhSoIrPncizpBkQNS049LHL7y6Ek';
-const GROQ_API_KEY = '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';
+const GROQ_API_KEY = process.env.REACT_APP_GROQ_API_KEY || '';
+const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY || '';
 
 type AIProvider = 'openai' | 'gemini' | 'groq';
 
