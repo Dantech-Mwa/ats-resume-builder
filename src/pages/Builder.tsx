@@ -1,10 +1,9 @@
 // ============================================
-// BUILDER PAGE - Fixed Upload & Analysis Flow
+// BUILDER PAGE - Working with existing store
 // ============================================
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
   MdSave,
   MdDownload,
@@ -19,7 +18,6 @@ import ResumeEditor from '../components/ResumeEditor';
 import Modal from '../components/Modal';
 import FileUpload from '../components/FileUpload';
 import Loading from '../components/Loading';
-import ATSScore from '../components/ATSScore';
 import ResumeParser from '../lib/parser';
 import AIService from '../lib/ai';
 import ResumeGenerator from '../lib/generator';
@@ -28,7 +26,7 @@ import toast from 'react-hot-toast';
 const Builder: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { currentResume, setCurrentResume, isDirty, saveResume } = useResume();
+  const { currentResume, updateSection, addItem, isDirty, saveResume, createNewResume } = useResume();
   const { atsScore, setATSScore, setAIRecommendations, setAILoading, aiLoading } = useAI();
   const { setExportLoading } = useExport();
 
@@ -36,7 +34,6 @@ const Builder: React.FC = () => {
   const [showUpload, setShowUpload] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
   const isUpload = searchParams.get('upload') === 'true';
 
@@ -45,16 +42,20 @@ const Builder: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-open upload if coming from upload flow
   useEffect(() => {
     if (isUpload) {
       setShowUpload(true);
     }
   }, [isUpload]);
 
-  // Handle file upload and parsing
+  // If no current resume, create one
+  useEffect(() => {
+    if (!currentResume && pageLoaded) {
+      createNewResume('My Resume');
+    }
+  }, [currentResume, pageLoaded, createNewResume]);
+
   const handleFileUpload = async (file: File) => {
-    setUploadedFile(file);
     setParsing(true);
     setShowUpload(false);
 
@@ -70,24 +71,39 @@ const Builder: React.FC = () => {
 
       toast.success('Resume parsed successfully! Analyzing...');
 
-      // Update current resume with parsed data
-      if (currentResume) {
-        const updatedResume = {
-          ...currentResume,
-          sections: {
-            ...currentResume.sections,
-            ...result.parsed,
-          },
-          metadata: {
-            ...currentResume.metadata,
-            updatedAt: new Date().toISOString(),
-          },
-        };
-        setCurrentResume(updatedResume);
-
-        // Run AI analysis
-        await analyzeResume(result.rawText);
+      // Update resume sections using existing store methods
+      if (result.parsed.contact) {
+        updateSection('contact', result.parsed.contact);
       }
+      if (result.parsed.summary) {
+        updateSection('summary', result.parsed.summary);
+      }
+      if (result.parsed.experience && result.parsed.experience.length > 0) {
+        result.parsed.experience.forEach((exp: any) => {
+          addItem('experience', exp);
+        });
+      }
+      if (result.parsed.education && result.parsed.education.length > 0) {
+        result.parsed.education.forEach((edu: any) => {
+          addItem('education', edu);
+        });
+      }
+      if (result.parsed.skills) {
+        updateSection('skills', result.parsed.skills);
+      }
+      if (result.parsed.certifications && result.parsed.certifications.length > 0) {
+        result.parsed.certifications.forEach((cert: any) => {
+          addItem('certifications', cert);
+        });
+      }
+      if (result.parsed.projects && result.parsed.projects.length > 0) {
+        result.parsed.projects.forEach((proj: any) => {
+          addItem('projects', proj);
+        });
+      }
+
+      // Run AI analysis
+      await analyzeResume(result.rawText);
     } catch (error: any) {
       toast.error('Failed to parse resume: ' + error.message);
     } finally {
@@ -95,17 +111,14 @@ const Builder: React.FC = () => {
     }
   };
 
-  // AI Analysis
   const analyzeResume = async (resumeText: string) => {
     setAILoading(true);
     try {
       const aiService = AIService.getInstance();
       
-      // Get ATS Score
       const score = await aiService.analyzeATS(resumeText);
       setATSScore(score);
 
-      // Get Recommendations
       const recommendations = await aiService.getRecommendations(resumeText, score);
       setAIRecommendations(recommendations);
 
@@ -118,11 +131,9 @@ const Builder: React.FC = () => {
     }
   };
 
-  // Manual re-analyze
   const handleReAnalyze = async () => {
     if (!currentResume) return;
     
-    // Build text from current resume sections
     let resumeText = '';
     const sections = currentResume.sections;
     
@@ -135,23 +146,23 @@ const Builder: React.FC = () => {
     }
     if (sections.experience?.length) {
       resumeText += 'EXPERIENCE\n';
-      sections.experience.forEach(exp => {
+      sections.experience.forEach((exp: any) => {
         resumeText += `${exp.position} at ${exp.company}\n${exp.description}\n`;
-        exp.achievements?.forEach(a => resumeText += `- ${a}\n`);
+        if (exp.achievements) exp.achievements.forEach((a: string) => resumeText += `- ${a}\n`);
         resumeText += '\n';
       });
     }
     if (sections.education?.length) {
       resumeText += 'EDUCATION\n';
-      sections.education.forEach(edu => {
+      sections.education.forEach((edu: any) => {
         resumeText += `${edu.degree} - ${edu.institution}\n\n`;
       });
     }
     if (sections.skills) {
       const skills = [
-        ...(sections.skills.technical || []).map(s => s.name),
-        ...(sections.skills.soft || []).map(s => s.name),
-        ...(sections.skills.tools || []).map(s => s.name),
+        ...(sections.skills.technical || []).map((s: any) => s.name),
+        ...(sections.skills.soft || []).map((s: any) => s.name),
+        ...(sections.skills.tools || []).map((s: any) => s.name),
       ];
       if (skills.length) resumeText += `SKILLS: ${skills.join(', ')}\n`;
     }
@@ -159,7 +170,6 @@ const Builder: React.FC = () => {
     await analyzeResume(resumeText);
   };
 
-  // Export
   const handleExport = async (format: string) => {
     if (!currentResume) {
       toast.error('No resume to export');
@@ -199,101 +209,51 @@ const Builder: React.FC = () => {
 
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col">
-      {/* Top Action Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="text-sm text-gray-600 hover:text-gray-900"
-          >
+          <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-600 hover:text-gray-900">
             ← Back to Dashboard
           </button>
           <div className="w-px h-5 bg-gray-200" />
           <h1 className="text-sm font-semibold text-gray-900">
             {currentResume?.metadata.title || 'Untitled Resume'}
           </h1>
-          {isDirty && (
-            <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" title="Unsaved changes" />
-          )}
-          {aiLoading && (
-            <span className="text-xs text-blue-600 animate-pulse">Analyzing...</span>
-          )}
+          {isDirty && <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" title="Unsaved changes" />}
+          {aiLoading && <span className="text-xs text-blue-600 animate-pulse">Analyzing...</span>}
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowUpload(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <MdCloudUpload className="w-4 h-4" />
-            Upload
+          <button onClick={() => setShowUpload(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+            <MdCloudUpload className="w-4 h-4" /> Upload
           </button>
-          <button
-            onClick={handleReAnalyze}
-            disabled={aiLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <MdAutoAwesome className="w-4 h-4" />
-            {aiLoading ? 'Analyzing...' : 'Re-analyze'}
+          <button onClick={handleReAnalyze} disabled={aiLoading} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50">
+            <MdAutoAwesome className="w-4 h-4" /> {aiLoading ? 'Analyzing...' : 'Re-analyze'}
           </button>
-          <button
-            onClick={saveResume}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-              isDirty
-                ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
-                : 'text-gray-400 bg-gray-50 cursor-not-allowed'
-            }`}
-          >
-            <MdSave className="w-4 h-4" />
-            Save
+          <button onClick={saveResume} className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isDirty ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 bg-gray-50 cursor-not-allowed'}`}>
+            <MdSave className="w-4 h-4" /> Save
           </button>
-          <button
-            onClick={() => setShowExport(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <MdDownload className="w-4 h-4" />
-            Download
+          <button onClick={() => setShowExport(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+            <MdDownload className="w-4 h-4" /> Download
           </button>
         </div>
       </div>
 
-      {/* Main Editor */}
       <div className="flex-1 overflow-hidden">
         <ResumeEditor onExport={handleExport} />
       </div>
 
-      {/* Upload Modal */}
-      <Modal
-        isOpen={showUpload}
-        onClose={() => setShowUpload(false)}
-        title="Upload Your Resume"
-        size="md"
-      >
-        <FileUpload
-          onFileSelect={handleFileUpload}
-          label="Upload Resume"
-          description="Upload your existing resume (PDF, DOCX, or TXT) for AI analysis and optimization"
-        />
+      <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload Your Resume" size="md">
+        <FileUpload onFileSelect={handleFileUpload} label="Upload Resume" description="Upload your existing resume (PDF, DOCX, or TXT) for AI analysis and optimization" />
       </Modal>
 
-      {/* Export Modal */}
-      <Modal
-        isOpen={showExport}
-        onClose={() => setShowExport(false)}
-        title="Download Resume"
-        size="sm"
-      >
+      <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Download Resume" size="sm">
         <div className="space-y-3">
           {[
             { format: 'pdf', icon: <MdPictureAsPdf />, label: 'PDF Document', desc: 'Best for applications', color: 'text-red-600 bg-red-50' },
             { format: 'docx', icon: <MdDescription />, label: 'Word Document', desc: 'Editable format', color: 'text-blue-600 bg-blue-50' },
             { format: 'txt', icon: <MdTextSnippet />, label: 'Plain Text', desc: 'ATS-optimized', color: 'text-green-600 bg-green-50' },
           ].map((option) => (
-            <button
-              key={option.format}
-              onClick={() => handleExport(option.format)}
-              className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition-colors"
-            >
+            <button key={option.format} onClick={() => handleExport(option.format)} className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition-colors">
               <div className={`w-10 h-10 ${option.color} rounded-lg flex items-center justify-center`}>
                 {React.cloneElement(option.icon, { className: 'w-5 h-5' })}
               </div>
