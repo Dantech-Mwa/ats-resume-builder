@@ -1,14 +1,28 @@
 // ============================================
-// RESUME PARSER - Browser-Compatible PDF, DOCX, TXT
+// PROFESSIONAL RESUME PARSER - AI-Enhanced
 // ============================================
 
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
-import { ResumeSections, ContactInfo, WorkExperience, Education, ResumeImportResult } from './types';
+import { ResumeSections, ContactInfo, WorkExperience, Education, Skill } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
-// Set PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+export interface ResumeImportResult {
+  success: boolean;
+  parsed: Partial<ResumeSections>;
+  errors: string[];
+  warnings: string[];
+  rawText: string;
+}
+
+export interface ParsedBlock {
+  type: 'contact' | 'summary' | 'experience' | 'education' | 'skills' | 'certification' | 'project' | 'language' | 'unknown';
+  content: string;
+  confidence: number;
+  metadata?: any;
+}
 
 class ResumeParser {
   private static instance: ResumeParser;
@@ -21,7 +35,7 @@ class ResumeParser {
   }
 
   // ============================================
-  // MAIN PARSING METHODS
+  // MAIN PARSING
   // ============================================
 
   async parseFile(file: File): Promise<ResumeImportResult> {
@@ -31,49 +45,39 @@ class ResumeParser {
     try {
       const validation = this.validateFile(file);
       if (!validation.valid) {
-        return {
-          success: false,
-          parsed: {},
-          errors: validation.errors,
-          warnings: [],
-          rawText: '',
-        };
+        return { success: false, parsed: {}, errors: validation.errors, warnings: [], rawText: '' };
       }
 
       let text = '';
-      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      const ext = file.name.split('.').pop()?.toLowerCase();
 
-      switch (fileExtension) {
-        case 'pdf':
-          text = await this.parsePDF(file);
-          break;
-        case 'docx':
-        case 'doc':
-          text = await this.parseDOCX(file);
-          break;
-        case 'txt':
-          text = await this.parseTXT(file);
-          break;
+      switch (ext) {
+        case 'pdf': text = await this.parsePDF(file); break;
+        case 'docx': case 'doc': text = await this.parseDOCX(file); break;
+        case 'txt': text = await this.parseTXT(file); break;
         default:
-          errors.push(`Unsupported file format: .${fileExtension}`);
+          errors.push(`Unsupported format: .${ext}`);
           return { success: false, parsed: {}, errors, warnings, rawText: '' };
       }
 
       if (!text.trim()) {
-        errors.push('Could not extract text from the file. The file might be empty or scanned.');
+        errors.push('No text extracted. File may be empty or image-based.');
         return { success: false, parsed: {}, errors, warnings, rawText: '' };
       }
 
-      const sections = this.extractSections(text);
+      // PROFESSIONAL PARSING PIPELINE
+      const cleanedText = this.cleanText(text);
+      const lines = this.splitIntoLines(cleanedText);
+      const blocks = this.identifyBlocks(lines);
+      const sections = this.blocksToSections(blocks, lines);
 
-      if (!sections.contact?.email) {
-        warnings.push('No email address found in the resume.');
-      }
-      if (!sections.contact?.phone) {
-        warnings.push('No phone number found in the resume.');
-      }
-      if (!sections.experience?.length) {
-        warnings.push('No work experience detected.');
+      // Validation & warnings
+      if (!sections.contact?.email) warnings.push('No email found');
+      if (!sections.contact?.phone) warnings.push('No phone found');
+      if (!sections.experience?.length) warnings.push('No experience detected - check format');
+      if (!sections.education?.length) warnings.push('No education detected');
+      if (!sections.skills?.technical?.length && !sections.skills?.soft?.length) {
+        warnings.push('No skills detected');
       }
 
       return {
@@ -81,17 +85,11 @@ class ResumeParser {
         parsed: sections,
         errors: [],
         warnings,
-        rawText: text,
+        rawText: cleanedText,
       };
     } catch (error: any) {
-      errors.push(`Failed to parse file: ${error.message}`);
-      return {
-        success: false,
-        parsed: {},
-        errors,
-        warnings,
-        rawText: '',
-      };
+      errors.push(`Parse failed: ${error.message}`);
+      return { success: false, parsed: {}, errors, warnings, rawText: '' };
     }
   }
 
@@ -101,84 +99,34 @@ class ResumeParser {
 
   private validateFile(file: File): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    const allowedExtensions = ['pdf', 'docx', 'doc', 'txt'];
-
-    if (!file) {
-      errors.push('No file provided.');
-      return { valid: false, errors };
-    }
-
-    if (file.size > maxSize) {
-      errors.push(`File size exceeds 10MB limit. Current size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-    }
-
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    if (!extension || !allowedExtensions.includes(extension)) {
-      errors.push(`Unsupported file type: .${extension}. Allowed: ${allowedExtensions.join(', ')}`);
-    }
-
+    const maxSize = 10 * 1024 * 1024;
+    const allowed = ['pdf', 'docx', 'doc', 'txt'];
+    if (!file) errors.push('No file provided.');
+    if (file.size > maxSize) errors.push(`File too large (max 10MB)`);
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !allowed.includes(ext)) errors.push(`Unsupported: .${ext}`);
     return { valid: errors.length === 0, errors };
   }
 
   // ============================================
-  // BROWSER-COMPATIBLE PDF PARSING (pdfjs-dist)
+  // PDF PARSING
   // ============================================
 
   private async parsePDF(file: File): Promise<string> {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      
-      // Load PDF using pdfjs-dist
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
-      
-      let fullText = '';
-      
-      // Extract text from each page
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        
-        // Combine text items
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        
-        fullText += pageText + '\n';
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map((item: any) => item.str).join(' ') + '\n';
       }
-
-      if (!fullText.trim()) {
-        throw new Error('No text content found in PDF');
-      }
-
-      return this.cleanPDFText(fullText);
-    } catch (error: any) {
-      console.error('PDF Parsing Error:', error);
-      
-      // Fallback: Try to read as text directly (for text-based PDFs)
-      try {
-        const text = await file.text();
-        const cleaned = this.cleanPDFText(text);
-        if (cleaned.length > 50) {
-          return cleaned;
-        }
-      } catch {
-        // Fallback failed
-      }
-      
-      throw new Error('Failed to parse PDF file. The file might be scanned or image-based. Please upload a text-based PDF.');
+      return text || '';
+    } catch {
+      const text = await file.text();
+      return text.length > 50 ? text : '';
     }
-  }
-
-  private cleanPDFText(text: string): string {
-    return text
-      .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control characters
-      .replace(/\f/g, '\n') // Form feed to newline
-      .replace(/\r\n/g, '\n') // Normalize line endings
-      .replace(/\n{3,}/g, '\n\n') // Reduce multiple newlines
-      .replace(/\s{2,}/g, ' ') // Reduce multiple spaces
-      .trim();
   }
 
   // ============================================
@@ -186,23 +134,9 @@ class ResumeParser {
   // ============================================
 
   private async parseDOCX(file: File): Promise<string> {
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const result = await mammoth.extractRawText({ arrayBuffer });
-      
-      if (!result.value) {
-        throw new Error('No text extracted from DOCX');
-      }
-
-      if (result.messages.length > 0) {
-        console.warn('DOCX Parsing Warnings:', result.messages);
-      }
-
-      return result.value;
-    } catch (error: any) {
-      console.error('DOCX Parsing Error:', error);
-      throw new Error('Failed to parse DOCX file. The file might be corrupted.');
-    }
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value || '';
   }
 
   // ============================================
@@ -210,287 +144,524 @@ class ResumeParser {
   // ============================================
 
   private async parseTXT(file: File): Promise<string> {
-    try {
-      const text = await file.text();
-      return text.trim();
-    } catch (error: any) {
-      console.error('TXT Parsing Error:', error);
-      throw new Error('Failed to read text file.');
-    }
+    return await file.text();
   }
 
   // ============================================
-  // SECTION EXTRACTION
+  // TEXT CLEANING
   // ============================================
 
-  private extractSections(text: string): Partial<ResumeSections> {
+  private cleanText(text: string): string {
+    return text
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/\t/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/[•●○▪▫■□]/g, '•')
+      .replace(/[–—―]/g, '-')
+      .replace(/[""]/g, '"')
+      .replace(/['']/g, "'")
+      .trim();
+  }
+
+  // ============================================
+  // LINE SPLITTING (Smart)
+  // ============================================
+
+  private splitIntoLines(text: string): string[] {
+    return text
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+  }
+
+  // ============================================
+  // BLOCK IDENTIFICATION (The Secret Sauce)
+  // ============================================
+
+  private identifyBlocks(lines: string[]): ParsedBlock[] {
+    const blocks: ParsedBlock[] = [];
+    let currentBlock = '';
+    let blockStart = 0;
+
+    const sectionHeaders = [
+      { pattern: /^(?:professional\s+)?summary|objective|profile|about\s+me|personal\s+statement|career\s+objective/i, type: 'summary' as const },
+      { pattern: /^(?:work\s+)?experience|employment|work\s+history|professional\s+background|career\s+history|relevant\s+experience/i, type: 'experience' as const },
+      { pattern: /^education|academic|qualification|academic\s+background|educational/i, type: 'education' as const },
+      { pattern: /^skills?|technical\s+skills?|core\s+competenc|technolog|expertise|proficienc/i, type: 'skills' as const },
+      { pattern: /^certification|certificate|license|accreditation/i, type: 'certification' as const },
+      { pattern: /^project|portfolio|key\s+project/i, type: 'project' as const },
+      { pattern: /^languages?|language\s+proficiency/i, type: 'language' as const },
+      { pattern: /^award|honor|achievement|recognition/i, type: 'unknown' as const },
+      { pattern: /^publication|research|paper/i, type: 'unknown' as const },
+      { pattern: /^volunteer|community|extracurricular/i, type: 'unknown' as const },
+      { pattern: /^reference/i, type: 'unknown' as const },
+    ];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const matchedHeader = sectionHeaders.find(h => h.pattern.test(line) && line.length < 60);
+
+      if (matchedHeader) {
+        if (currentBlock.trim()) {
+          blocks.push({
+            type: this.determineBlockType(blocks.length === 0 ? 'contact' : 'unknown', lines.slice(blockStart, i)),
+            content: currentBlock.trim(),
+            confidence: 0.8,
+          });
+        }
+        currentBlock = line + '\n';
+        blockStart = i;
+      } else {
+        currentBlock += line + '\n';
+      }
+    }
+
+    if (currentBlock.trim()) {
+      blocks.push({
+        type: 'unknown',
+        content: currentBlock.trim(),
+        confidence: 0.5,
+      });
+    }
+
+    // Re-classify blocks
+    return this.reclassifyBlocks(blocks, lines);
+  }
+
+  private determineBlockType(defaultType: string, blockLines: string[]): string {
+    const text = blockLines.join(' ').toLowerCase();
+    
+    if (blockLines.length <= 5 && (
+      text.includes('@') || 
+      text.includes('phone') || 
+      text.includes('linkedin') ||
+      text.match(/[\d\s\+\-\(\)]{10,}/)
+    )) return 'contact';
+
+    if (text.includes('@') && text.includes('.com')) return 'contact';
+    
+    return defaultType;
+  }
+
+  private reclassifyBlocks(blocks: ParsedBlock[], allLines: string[]): ParsedBlock[] {
+    const firstBlock = blocks[0];
+    
+    // First block is usually contact info
+    if (firstBlock && firstBlock.type === 'unknown') {
+      const content = firstBlock.content.toLowerCase();
+      if (content.includes('@') || content.match(/[\d\s\+\-\(\)]{10,}/) || content.includes('linkedin')) {
+        firstBlock.type = 'contact';
+        firstBlock.confidence = 0.9;
+      }
+    }
+
+    // Last block might be skills
+    const lastBlock = blocks[blocks.length - 1];
+    if (lastBlock && lastBlock.type === 'unknown') {
+      const lines = lastBlock.content.split('\n');
+      const commaCount = (lastBlock.content.match(/,/g) || []).length;
+      if (commaCount > 5 || lines.some(l => l.includes('•') && l.length < 40)) {
+        lastBlock.type = 'skills';
+        lastBlock.confidence = 0.7;
+      }
+    }
+
+    return blocks;
+  }
+
+  // ============================================
+  // BLOCKS TO SECTIONS
+  // ============================================
+
+  private blocksToSections(blocks: ParsedBlock[], lines: string[]): Partial<ResumeSections> {
     const sections: Partial<ResumeSections> = {};
+    const fullText = lines.join('\n');
 
-    sections.contact = this.extractContactInfo(text);
+    // Extract contact
+    sections.contact = this.extractContact(fullText, blocks);
 
-    const sectionMap = this.splitIntoSections(text);
-
+    // Extract summary
+    const summaryBlock = blocks.find(b => b.type === 'summary');
     sections.summary = {
-      content: sectionMap.get('summary') || sectionMap.get('objective') || sectionMap.get('profile') || '',
+      content: summaryBlock ? this.extractSummaryText(summaryBlock.content) : this.findSummaryInText(fullText),
       aiOptimized: false,
       lastModified: new Date().toISOString(),
     };
 
-    sections.experience = this.extractExperience(
-      sectionMap.get('experience') || sectionMap.get('work experience') || sectionMap.get('employment') || ''
-    );
+    // Extract experience
+    const expBlocks = blocks.filter(b => b.type === 'experience' || b.type === 'unknown');
+    sections.experience = this.extractAllExperience(expBlocks, fullText);
 
-    sections.education = this.extractEducation(
-      sectionMap.get('education') || sectionMap.get('academic') || ''
-    );
+    // Extract education
+    const eduBlocks = blocks.filter(b => b.type === 'education' || b.type === 'unknown');
+    sections.education = this.extractAllEducation(eduBlocks, fullText);
 
-    sections.skills = this.extractSkills(
-      sectionMap.get('skills') || sectionMap.get('technologies') || sectionMap.get('competencies') || ''
-    );
+    // Extract skills
+    sections.skills = this.extractAllSkills(fullText, blocks);
 
-    sections.certifications = this.extractCertifications(
-      sectionMap.get('certifications') || sectionMap.get('certificates') || ''
-    );
+    // Extract certifications
+    sections.certifications = this.extractCertifications(fullText);
 
-    sections.projects = this.extractProjects(
-      sectionMap.get('projects') || sectionMap.get('portfolio') || ''
-    );
-
-    sections.languages = this.extractLanguages(text);
+    // Extract projects
+    sections.projects = this.extractProjects(fullText);
 
     return sections;
   }
 
   // ============================================
-  // CONTACT INFO EXTRACTION
+  // CONTACT EXTRACTION (Enhanced)
   // ============================================
 
-  private extractContactInfo(text: string): ContactInfo {
+  private extractContact(text: string, blocks: ParsedBlock[]): ContactInfo {
     const contact: ContactInfo = {
-      fullName: '',
-      email: '',
-      phone: '',
-      location: '',
-      country: '',
+      fullName: '', email: '', phone: '', location: '', country: '',
     };
 
-    const lines = text.split('\n').filter(line => line.trim());
-    if (lines.length > 0) {
-      const firstLine = lines[0].trim();
-      if (!firstLine.includes('@') && !firstLine.match(/^[\d\s\+\-\(\)]+$/)) {
-        contact.fullName = firstLine;
-      }
-    }
+    // Try first block for contact
+    const contactBlock = blocks.find(b => b.type === 'contact') || blocks[0];
+    const contactText = contactBlock?.content || text.split('\n').slice(0, 10).join('\n');
 
-    const emailMatch = text.match(/[\w\.-]+@[\w\.-]+\.\w{2,}/);
-    if (emailMatch) {
-      contact.email = emailMatch[0];
-    }
-
-    const phonePatterns = [
-      /(?:\+\d{1,3}[\s\-]?)?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}/,
-      /\+\d{1,3}[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{4}/,
-      /\d{3}[\s\-]?\d{3}[\s\-]?\d{4}/,
-    ];
-    
-    for (const pattern of phonePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        contact.phone = match[0];
+    // Extract name (first non-empty line that's not email/phone)
+    const lines = contactText.split('\n').filter(l => l.trim());
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.includes('@') && 
+          !trimmed.match(/^[\d\s\+\-\(\)\.]{7,}$/) &&
+          !trimmed.match(/^(linkedin|github|portfolio)/i) &&
+          trimmed.length > 2 && trimmed.length < 60 &&
+          /^[A-Za-z\s\.\-']+$/.test(trimmed)) {
+        contact.fullName = trimmed;
         break;
       }
     }
 
-    const linkedInMatch = text.match(/linkedin\.com\/in\/[\w\-]+/i);
-    if (linkedInMatch) {
-      contact.linkedIn = `https://www.${linkedInMatch[0]}`;
+    // Extract email (multiple patterns)
+    const emailPatterns = [
+      /([\w\.\-\+]+@[\w\.\-]+\.[a-z]{2,})/gi,
+      /email:?\s*([\w\.\-\+]+@[\w\.\-]+\.[a-z]{2,})/gi,
+      /e-?mail:?\s*([\w\.\-\+]+@[\w\.\-]+\.[a-z]{2,})/gi,
+    ];
+    for (const pattern of emailPatterns) {
+      const match = pattern.exec(text);
+      if (match) { contact.email = match[1] || match[0]; break; }
     }
 
-    const githubMatch = text.match(/github\.com\/[\w\-]+/i);
-    if (githubMatch) {
-      contact.github = `https://www.${githubMatch[0]}`;
+    // Extract phone (enhanced patterns)
+    const phonePatterns = [
+      /(?:\+\d{1,3}[\s\-\.]?)?\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4}/,
+      /phone:?\s*([\+\d\s\-\(\)\.]{10,})/i,
+      /tel:?\s*([\+\d\s\-\(\)\.]{10,})/i,
+      /mobile:?\s*([\+\d\s\-\(\)\.]{10,})/i,
+      /cell:?\s*([\+\d\s\-\(\)\.]{10,})/i,
+    ];
+    for (const pattern of phonePatterns) {
+      const match = text.match(pattern);
+      if (match) { contact.phone = match[1] || match[0]; break; }
     }
+
+    // Extract location
+    const locationPatterns = [
+      /(?:location|address|city|based in):\s*([^\n,]+(?:,\s*[A-Z]{2})?)/i,
+      /([A-Z][a-z]+,\s*(?:[A-Z]{2}|[A-Z][a-z]+))/,
+      /([A-Z][a-z]+,\s*(?:United States|USA|UK|Canada|Australia))/i,
+    ];
+    for (const pattern of locationPatterns) {
+      const match = text.match(pattern);
+      if (match) { contact.location = match[1].trim(); break; }
+    }
+
+    // Extract LinkedIn
+    const linkedinMatch = text.match(/(?:linkedin\.com\/in\/|linkedin:?\s*)([\w\-]+)/i);
+    if (linkedinMatch) contact.linkedIn = `https://linkedin.com/in/${linkedinMatch[1]}`;
+
+    // Extract GitHub
+    const githubMatch = text.match(/(?:github\.com\/|github:?\s*)([\w\-]+)/i);
+    if (githubMatch) contact.github = `https://github.com/${githubMatch[1]}`;
+
+    // Extract portfolio/website
+    const urlMatch = text.match(/(?:portfolio|website|web):?\s*(https?:\/\/[\w\.\-]+\.[a-z]{2,}(?:\/[\w\-\.]*)*)/i);
+    if (urlMatch) contact.portfolio = urlMatch[1];
 
     return contact;
   }
 
   // ============================================
-  // SECTION SPLITTING
+  // SUMMARY EXTRACTION
   // ============================================
 
-  private splitIntoSections(text: string): Map<string, string> {
-    const sectionMap = new Map<string, string>();
-    
-    const sectionHeaders = [
-      'summary', 'professional summary', 'objective', 'profile',
-      'experience', 'work experience', 'employment', 'work history',
-      'education', 'academic background', 'qualifications',
-      'skills', 'technical skills', 'core competencies', 'technologies',
-      'certifications', 'certificates', 'licenses',
-      'projects', 'portfolio', 'project experience',
-      'awards', 'honors', 'achievements',
-      'publications', 'research',
-      'volunteer', 'volunteer experience', 'community service',
-      'languages', 'language proficiency',
-    ];
+  private extractSummaryText(blockContent: string): string {
+    // Remove the header line
+    const lines = blockContent.split('\n');
+    const contentLines = lines.filter(l => 
+      !/^(?:professional\s+)?summary|objective|profile/i.test(l) || l.length > 60
+    );
+    return contentLines.join(' ').trim();
+  }
 
+  private findSummaryInText(text: string): string {
+    // Look for paragraph after contact info and before experience
     const lines = text.split('\n');
-    let currentSection = 'header';
-    let currentContent: string[] = [];
+    let contactEnded = false;
+    let summaryLines: string[] = [];
 
     for (const line of lines) {
-      const trimmedLine = line.trim().toLowerCase();
-      const matchedHeader = sectionHeaders.find(header => 
-        trimmedLine === header || 
-        trimmedLine.startsWith(header) ||
-        trimmedLine.includes(` ${header}`)
-      );
-
-      if (matchedHeader && trimmedLine.length < 50) {
-        if (currentContent.length > 0) {
-          sectionMap.set(currentSection, currentContent.join('\n').trim());
-        }
-        currentSection = matchedHeader;
-        currentContent = [];
-      } else {
-        currentContent.push(line);
+      if (!contactEnded && (line.includes('@') || line.match(/[\d\s\+\-\(\)]{10,}/))) {
+        contactEnded = true;
+        continue;
       }
+      if (contactEnded && line.length > 50 && !/^(?:experience|education|skills|work)/i.test(line)) {
+        summaryLines.push(line);
+        if (summaryLines.length >= 4) break;
+      }
+      if (/^(?:experience|education|skills|work)/i.test(line)) break;
     }
 
-    if (currentContent.length > 0) {
-      sectionMap.set(currentSection, currentContent.join('\n').trim());
-    }
-
-    if (sectionMap.size === 0) {
-      sectionMap.set('general', text);
-    }
-
-    return sectionMap;
+    return summaryLines.join(' ').trim();
   }
 
   // ============================================
-  // EXPERIENCE EXTRACTION
+  // EXPERIENCE EXTRACTION (Enhanced)
   // ============================================
 
-  private extractExperience(text: string): WorkExperience[] {
-    if (!text.trim()) return [];
-
+  private extractAllExperience(blocks: ParsedBlock[], fullText: string): WorkExperience[] {
     const experiences: WorkExperience[] = [];
-    const lines = text.split('\n').filter(line => line.trim());
     
-    let currentCompany = '';
-    let currentPosition = '';
-    let currentDescription: string[] = [];
-    let currentStartDate = '';
-    let currentEndDate = '';
+    // Try to find experience section
+    const expSection = this.findSection(fullText, [
+      'experience', 'work experience', 'employment', 'work history',
+      'professional experience', 'professional background', 'career history',
+    ]);
 
-    const datePattern = /(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}\s*(?:-|–|to)\s*(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|Present|Current)\b)/gi;
+    if (!expSection) return experiences;
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      const dateMatch = line.match(datePattern);
-      const isHeader = !line.startsWith('•') && !line.startsWith('-') && !line.startsWith('*') && line.length < 100;
-
-      if (isHeader && (dateMatch || i === 0 || !lines[i-1]?.trim())) {
-        if (currentCompany || currentPosition) {
-          experiences.push({
-            id: uuidv4(),
-            company: currentCompany,
-            position: currentPosition,
-            startDate: currentStartDate,
-            endDate: currentEndDate,
-            current: currentEndDate.toLowerCase().includes('present'),
-            location: '',
-            description: currentDescription.join('\n'),
-            achievements: [],
-            technologies: [],
-            aiSuggestions: [],
-          });
-        }
-
-        currentCompany = line;
-        currentPosition = '';
-        currentDescription = [];
-        currentStartDate = '';
-        currentEndDate = '';
-
-        if (dateMatch) {
-          const dates = dateMatch[0].split(/\s*(?:-|–|to)\s*/);
-          currentStartDate = dates[0]?.trim() || '';
-          currentEndDate = dates[1]?.trim() || '';
-        }
-      } else {
-        currentDescription.push(line);
+    // Split into individual job entries
+    const entries = this.splitExperienceEntries(expSection);
+    
+    for (const entry of entries) {
+      const exp = this.parseExperienceEntry(entry);
+      if (exp.company || exp.position) {
+        experiences.push(exp);
       }
     }
 
-    if (currentCompany || currentPosition) {
-      experiences.push({
-        id: uuidv4(),
-        company: currentCompany,
-        position: currentPosition,
-        startDate: currentStartDate,
-        endDate: currentEndDate,
-        current: currentEndDate.toLowerCase().includes('present'),
-        location: '',
-        description: currentDescription.join('\n'),
-        achievements: [],
-        technologies: [],
-        aiSuggestions: [],
-      });
+    return experiences;
+  }
+
+  private findSection(text: string, headers: string[]): string | null {
+    const lines = text.split('\n');
+    let startIndex = -1;
+    let endIndex = lines.length;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].toLowerCase().trim();
+      if (startIndex === -1 && headers.some(h => line.includes(h) && line.length < 50)) {
+        startIndex = i + 1;
+        continue;
+      }
+      if (startIndex !== -1 && this.isSectionHeader(line) && line.length < 50) {
+        endIndex = i;
+        break;
+      }
     }
 
-    return experiences;
+    if (startIndex === -1) return null;
+    return lines.slice(startIndex, endIndex).join('\n');
+  }
+
+  private isSectionHeader(line: string): boolean {
+    const headers = [
+      'education', 'skills', 'certification', 'project', 'language',
+      'award', 'publication', 'volunteer', 'reference',
+      'academic', 'technical skills', 'core competencies',
+    ];
+    return headers.some(h => line.includes(h));
+  }
+
+  private splitExperienceEntries(text: string): string[] {
+    // Split by date patterns or company separators
+    const datePattern = /(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}\s*(?:-|–|to)\s*(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|Present|Current)\b)/gi;
+    
+    // Try splitting by dates first
+    const parts = text.split(datePattern);
+    if (parts.length > 1) {
+      const entries: string[] = [];
+      for (let i = 0; i < parts.length - 1; i += 2) {
+        entries.push((parts[i] || '') + (parts[i + 1] || ''));
+      }
+      if (entries.length > 0) return entries;
+    }
+
+    // Fallback: split by double newlines
+    const chunks = text.split(/\n\s*\n/);
+    if (chunks.length > 1) return chunks;
+
+    return [text];
+  }
+
+  private parseExperienceEntry(text: string): WorkExperience {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    
+    let company = '';
+    let position = '';
+    let startDate = '';
+    let endDate = '';
+    let current = false;
+    let location = '';
+    const description: string[] = [];
+    const achievements: string[] = [];
+
+    // Extract dates
+    const datePattern = /(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4})\s*(?:-|–|to)\s*(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|Present|Current)\b/i;
+    const dateMatch = text.match(datePattern);
+    if (dateMatch) {
+      startDate = dateMatch[1];
+      endDate = dateMatch[2];
+      current = /present|current/i.test(endDate);
+    }
+
+    // First meaningful line is usually the company/position
+    for (const line of lines) {
+      if (!position && line.length > 3 && line.length < 80 && !line.startsWith('•') && !line.startsWith('-')) {
+        // Check if line contains company and position separated by | or -
+        const separator = line.match(/\s*[|\-–—]\s*/);
+        if (separator && line.length < 100) {
+          const parts = line.split(separator[0]);
+          position = parts[0].trim();
+          company = parts[1]?.trim() || '';
+        } else {
+          position = line;
+          // Next line might be company
+        }
+        continue;
+      }
+      
+      if (position && !company && line.length < 80 && !line.startsWith('•')) {
+        company = line;
+        continue;
+      }
+
+      // Location
+      const locMatch = line.match(/(?:location:?\s*)?([A-Z][a-z]+,\s*(?:[A-Z]{2}|[A-Z][a-z]+))/);
+      if (locMatch && !location) {
+        location = locMatch[1];
+        continue;
+      }
+
+      // Achievements
+      if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
+        achievements.push(line.replace(/^[•\-*]\s*/, ''));
+      } else if (line.length > 10) {
+        description.push(line);
+      }
+    }
+
+    return {
+      id: uuidv4(),
+      company: company || this.extractCompanyFromText(text),
+      position: position || '',
+      startDate,
+      endDate,
+      current,
+      location,
+      description: description.join(' '),
+      achievements,
+      technologies: [],
+      aiSuggestions: [],
+    };
+  }
+
+  private extractCompanyFromText(text: string): string {
+    // Common company patterns
+    const patterns = [
+      /(?:at|with|for)\s+([A-Z][A-Za-z\s&\.]+?)(?:\s*,|\s*$|\s*\n)/,
+      /([A-Z][A-Za-z]+(?:\s+(?:Inc|LLC|Ltd|Corp|Corporation|Group|Technologies|Solutions|Systems)))/,
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) return match[1].trim();
+    }
+    return '';
   }
 
   // ============================================
   // EDUCATION EXTRACTION
   // ============================================
 
-  private extractEducation(text: string): Education[] {
-    if (!text.trim()) return [];
-
+  private extractAllEducation(blocks: ParsedBlock[], fullText: string): Education[] {
     const education: Education[] = [];
-    const lines = text.split('\n').filter(line => line.trim());
+    
+    const eduSection = this.findSection(fullText, [
+      'education', 'academic background', 'qualifications', 'academic',
+      'educational background', 'educational qualification',
+    ]);
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    if (!eduSection) return education;
 
-      const degreePatterns = [
-        /(?:Bachelor|Master|Doctorate|Ph\.?D|MBA|B\.?S\.?|M\.?S\.?|B\.?A\.?|M\.?A\.?|Associate)/i,
-        /(?:degree|diploma|certificate)/i,
-      ];
+    const entries = eduSection.split(/\n\s*\n/);
+    
+    for (const entry of entries) {
+      const lines = entry.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) continue;
 
-      const hasDegree = degreePatterns.some(pattern => pattern.test(line));
+      let institution = '';
+      let degree = '';
+      let field = '';
+      let startDate = '';
+      let endDate = '';
+      let gpa = '';
 
-      if (hasDegree) {
-        const edu: Education = {
+      for (const line of lines) {
+        // Degree patterns
+        const degreePatterns = [
+          /(Bachelor|Master|Doctorate|Ph\.?D\.?|MBA|B\.?S\.?c?\.?|M\.?S\.?c?\.?|B\.?A\.?|M\.?A\.?|Associate|Diploma)\s*(?:of|in)?\s*([\w\s]+)?/i,
+          /(B\.?S\.?c?\.?|M\.?S\.?c?\.?|B\.?A\.?|M\.?A\.?|Ph\.?D\.?|MBA)\s*(?:in\s*)?([\w\s]+)?/i,
+        ];
+        for (const pattern of degreePatterns) {
+          const match = line.match(pattern);
+          if (match) {
+            degree = match[0];
+            field = match[2] || '';
+            break;
+          }
+        }
+
+        // Institution patterns (usually a proper noun line)
+        if (!institution && /^[A-Z]/.test(line) && line.length > 5 && line.length < 80) {
+          const commonWords = ['university', 'college', 'institute', 'school', 'academy'];
+          if (commonWords.some(w => line.toLowerCase().includes(w)) || /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$/.test(line)) {
+            institution = line;
+          }
+        }
+
+        // GPA
+        const gpaMatch = line.match(/GPA:?\s*([\d.]+(?:\/\d\.?\d?)?)/i);
+        if (gpaMatch) gpa = gpaMatch[1];
+
+        // Dates
+        const datePattern = /(\d{4})\s*(?:-|–|to)\s*(\d{4}|Present|Current)/i;
+        const dateMatch = line.match(datePattern);
+        if (dateMatch) {
+          startDate = dateMatch[1];
+          endDate = dateMatch[2];
+        }
+      }
+
+      if (degree || institution) {
+        education.push({
           id: uuidv4(),
-          institution: '',
-          degree: line,
-          field: '',
-          startDate: '',
-          endDate: '',
+          institution,
+          degree,
+          field,
+          startDate,
+          endDate,
+          gpa,
           honors: [],
           activities: [],
           relevantCourses: [],
-        };
-
-        if (i + 1 < lines.length && !degreePatterns.some(p => p.test(lines[i+1]))) {
-          edu.institution = lines[i + 1].trim();
-        } else if (i > 0 && !degreePatterns.some(p => p.test(lines[i-1]))) {
-          edu.institution = lines[i - 1].trim();
-        }
-
-        const gpaMatch = line.match(/GPA:?\s*([\d.]+)/i);
-        if (gpaMatch) {
-          edu.gpa = gpaMatch[1];
-        }
-
-        education.push(edu);
+        });
       }
     }
 
@@ -498,147 +669,170 @@ class ResumeParser {
   }
 
   // ============================================
-  // SKILLS EXTRACTION
+  // SKILLS EXTRACTION (Enhanced)
   // ============================================
 
-  private extractSkills(text: string): any {
-    if (!text.trim()) {
-      return { technical: [], soft: [], languages: [], tools: [], other: [] };
-    }
+  private extractAllSkills(fullText: string, blocks: ParsedBlock[]): any {
+    const skillsSection = this.findSection(fullText, [
+      'skills', 'technical skills', 'core competencies', 'technologies',
+      'expertise', 'proficiencies', 'technical proficiencies',
+    ]);
 
-    const skillsList = text
-      .split(/[,;•\-\n•\|\/]/)
-      .map(skill => skill.trim())
-      .filter(skill => skill.length > 0 && skill.length < 50);
+    const skillsText = skillsSection || fullText;
+    
+    // Split by common delimiters
+    const rawSkills = skillsText
+      .split(/[,;•\|\/\n]/)
+      .map(s => s.trim())
+      .filter(s => s.length > 1 && s.length < 60 && !/^(?:skills|technical|core|competencies)/i.test(s));
 
-    const technicalSkills: string[] = [];
-    const softSkills: string[] = [];
-    const tools: string[] = [];
+    const technical: Skill[] = [];
+    const soft: Skill[] = [];
+    const tools: Skill[] = [];
 
     const techKeywords = [
-      'programming', 'developer', 'engineer', 'coding',
-      'javascript', 'python', 'java', 'c++', 'ruby', 'php',
-      'html', 'css', 'react', 'angular', 'vue', 'node',
-      'sql', 'database', 'cloud', 'aws', 'azure', 'devops',
-      'docker', 'kubernetes', 'git', 'linux', 'agile',
+      'javascript', 'typescript', 'python', 'java', 'c++', 'c#', 'ruby', 'php', 'swift', 'kotlin', 'go', 'rust',
+      'react', 'angular', 'vue', 'node', 'express', 'django', 'flask', 'spring', 'laravel', 'rails',
+      'html', 'css', 'sass', 'less', 'tailwind', 'bootstrap', 'jquery',
+      'sql', 'mysql', 'postgresql', 'mongodb', 'redis', 'elasticsearch', 'oracle', 'mssql',
+      'aws', 'azure', 'gcp', 'cloud', 'docker', 'kubernetes', 'jenkins', 'terraform', 'ansible',
+      'git', 'github', 'gitlab', 'bitbucket', 'jira', 'confluence',
+      'api', 'rest', 'graphql', 'microservices', 'serverless',
+      'machine learning', 'ai', 'data science', 'analytics', 'tableau', 'power bi',
+      'agile', 'scrum', 'kanban', 'devops', 'ci/cd', 'tdd',
+      'linux', 'unix', 'windows', 'macos', 'bash', 'shell',
+      'figma', 'sketch', 'photoshop', 'illustrator', 'indesign',
     ];
 
     const softKeywords = [
-      'leadership', 'communication', 'teamwork', 'management',
-      'problem solving', 'critical thinking', 'creativity',
-      'adaptability', 'time management', 'organization',
+      'leadership', 'communication', 'teamwork', 'problem solving', 'critical thinking',
+      'time management', 'project management', 'adaptability', 'creativity', 'collaboration',
+      'analytical', 'detail-oriented', 'organized', 'self-motivated', 'strategic planning',
+      'mentoring', 'coaching', 'negotiation', 'presentation', 'public speaking',
+      'interpersonal', 'emotional intelligence', 'conflict resolution', 'decision making',
     ];
 
-    skillsList.forEach(skill => {
-      const lowerSkill = skill.toLowerCase();
-      if (techKeywords.some(keyword => lowerSkill.includes(keyword))) {
-        technicalSkills.push(skill);
-      } else if (softKeywords.some(keyword => lowerSkill.includes(keyword))) {
-        softSkills.push(skill);
-      } else if (lowerSkill.includes('tool') || lowerSkill.includes('software')) {
-        tools.push(skill);
-      } else {
-        technicalSkills.push(skill);
+    const toolKeywords = [
+      'excel', 'word', 'powerpoint', 'outlook', 'office', 'google suite', 'slack', 'teams',
+      'zoom', 'salesforce', 'hubspot', 'sap', 'oracle', 'netsuite',
+      'photoshop', 'illustrator', 'premiere', 'after effects', 'lightroom',
+    ];
+
+    for (const skill of rawSkills) {
+      const lower = skill.toLowerCase();
+      
+      if (techKeywords.some(k => lower.includes(k))) {
+        technical.push({ name: skill, level: 'Intermediate', category: 'Technical' });
+      } else if (softKeywords.some(k => lower.includes(k))) {
+        soft.push({ name: skill, level: 'Intermediate', category: 'Soft Skills' });
+      } else if (toolKeywords.some(k => lower.includes(k))) {
+        tools.push({ name: skill, level: 'Intermediate', category: 'Tools' });
+      } else if (skill.length > 2 && /^[A-Za-z#\+\.\s]+$/.test(skill)) {
+        // Unknown but looks like a skill
+        technical.push({ name: skill, level: 'Intermediate', category: 'Technical' });
       }
-    });
+    }
+
+    // Deduplicate
+    const uniqueTechnical = technical.filter((s, i, arr) => 
+      arr.findIndex(t => t.name.toLowerCase() === s.name.toLowerCase()) === i
+    );
+    const uniqueSoft = soft.filter((s, i, arr) => 
+      arr.findIndex(t => t.name.toLowerCase() === s.name.toLowerCase()) === i
+    );
 
     return {
-      technical: technicalSkills.slice(0, 20).map(name => ({
-        name, level: 'Intermediate' as const, category: 'Technical',
-      })),
-      soft: softSkills.slice(0, 10).map(name => ({
-        name, level: 'Intermediate' as const, category: 'Soft Skills',
-      })),
+      technical: uniqueTechnical.slice(0, 30),
+      soft: uniqueSoft.slice(0, 15),
       languages: [],
-      tools: tools.slice(0, 10).map(name => ({
-        name, level: 'Intermediate' as const, category: 'Tools',
-      })),
+      tools: tools.slice(0, 15),
       other: [],
     };
   }
 
   // ============================================
-  // CERTIFICATIONS EXTRACTION
+  // CERTIFICATIONS
   // ============================================
 
-  private extractCertifications(text: string): any[] {
-    if (!text.trim()) return [];
-    const certifications: any[] = [];
-    const lines = text.split('\n').filter(line => line.trim());
-    lines.forEach(line => {
-      if (line.trim().length > 5) {
-        certifications.push({
-          id: uuidv4(), name: line.trim(), issuer: '', date: '', inProgress: false,
-        });
-      }
-    });
-    return certifications.slice(0, 10);
-  }
+  private extractCertifications(fullText: string): any[] {
+    const certSection = this.findSection(fullText, [
+      'certifications', 'certificates', 'licenses', 'certification',
+      'professional certifications', 'accreditations',
+    ]);
 
-  // ============================================
-  // PROJECTS EXTRACTION
-  // ============================================
+    if (!certSection) return [];
 
-  private extractProjects(text: string): any[] {
-    if (!text.trim()) return [];
-    const projects: any[] = [];
-    const lines = text.split('\n').filter(line => line.trim());
-    let currentProject: any = null;
+    const certs: any[] = [];
+    const lines = certSection.split('\n').filter(l => l.trim().length > 3);
 
-    lines.forEach(line => {
-      const trimmed = line.trim();
-      if (trimmed.length < 100 && !trimmed.startsWith('•') && !trimmed.startsWith('-')) {
-        if (currentProject) projects.push(currentProject);
-        currentProject = {
-          id: uuidv4(), name: trimmed, description: '',
-          technologies: [], achievements: [], role: '', current: false,
-        };
-      } else if (currentProject) {
-        currentProject.description += trimmed + '\n';
-        const techMatch = trimmed.match(/(?:technologies|tech stack|built with):\s*(.+)/i);
-        if (techMatch) {
-          currentProject.technologies = techMatch[1].split(/[,;]/).map((t: string) => t.trim());
+    for (const line of lines) {
+      const clean = line.replace(/^[•\-*]\s*/, '').trim();
+      if (clean.length > 3) {
+        // Try to extract issuer (after dash or comma)
+        let name = clean;
+        let issuer = '';
+        const dashMatch = clean.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+        if (dashMatch) {
+          name = dashMatch[1].trim();
+          issuer = dashMatch[2].trim();
         }
-      }
-    });
-
-    if (currentProject) projects.push(currentProject);
-    return projects.slice(0, 10);
-  }
-
-  // ============================================
-  // LANGUAGES EXTRACTION
-  // ============================================
-
-  private extractLanguages(text: string): any[] {
-    const languages: any[] = [];
-    const languagePatterns = [
-      'English', 'Spanish', 'French', 'German', 'Chinese',
-      'Japanese', 'Korean', 'Arabic', 'Portuguese', 'Russian',
-      'Italian', 'Dutch', 'Hindi', 'Turkish', 'Vietnamese',
-    ];
-
-    languagePatterns.forEach(lang => {
-      const pattern = new RegExp(`${lang}\\s*(?:\\(([^)]+)\\))?`, 'i');
-      const match = text.match(pattern);
-      if (match) {
-        languages.push({
-          name: lang,
-          proficiency: this.mapProficiency(match[1] || 'Intermediate'),
+        certs.push({
+          id: uuidv4(),
+          name,
+          issuer,
+          date: '',
+          inProgress: false,
         });
       }
-    });
+    }
 
-    return languages;
+    return certs.slice(0, 15);
   }
 
-  private mapProficiency(text: string): 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic' {
-    const t = text.toLowerCase();
-    if (t.includes('native')) return 'Native';
-    if (t.includes('fluent')) return 'Fluent';
-    if (t.includes('advanced')) return 'Advanced';
-    if (t.includes('basic') || t.includes('beginner')) return 'Basic';
-    return 'Intermediate';
+  // ============================================
+  // PROJECTS
+  // ============================================
+
+  private extractProjects(fullText: string): any[] {
+    const projectSection = this.findSection(fullText, [
+      'projects', 'portfolio', 'project experience', 'key projects',
+      'personal projects', 'academic projects',
+    ]);
+
+    if (!projectSection) return [];
+
+    const projects: any[] = [];
+    const entries = projectSection.split(/\n\s*\n/);
+
+    for (const entry of entries) {
+      const lines = entry.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length === 0) continue;
+
+      const name = lines[0].replace(/^[•\-*]\s*/, '').trim();
+      const description = lines.slice(1).join(' ').trim();
+      
+      // Extract technologies
+      const techMatch = description.match(/(?:technologies|tech stack|built with|using):\s*([^.•]+)/i);
+      const technologies = techMatch 
+        ? techMatch[1].split(/[,;]/).map(t => t.trim()).filter(Boolean)
+        : [];
+
+      if (name.length > 2) {
+        projects.push({
+          id: uuidv4(),
+          name,
+          description: description.substring(0, 500),
+          technologies,
+          achievements: [],
+          role: '',
+          current: false,
+          startDate: '',
+          endDate: '',
+        });
+      }
+    }
+
+    return projects.slice(0, 10);
   }
 }
 
