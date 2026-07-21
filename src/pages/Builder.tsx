@@ -1,5 +1,5 @@
 // ============================================
-// BUILDER PAGE - Working with existing store
+// BUILDER PAGE - Fixed Upload & Auto-Populate
 // ============================================
 
 import React, { useEffect, useState } from 'react';
@@ -26,7 +26,13 @@ import toast from 'react-hot-toast';
 const Builder: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { currentResume, updateSection, addItem, isDirty, saveResume, createNewResume } = useResume();
+  const { 
+    currentResume, 
+    createNewResume, 
+    saveResume, 
+    isDirty,
+    setCurrentResume 
+  } = useResume();
   const { atsScore, setATSScore, setAIRecommendations, setAILoading, aiLoading } = useAI();
   const { setExportLoading } = useExport();
 
@@ -48,7 +54,7 @@ const Builder: React.FC = () => {
     }
   }, [isUpload]);
 
-  // If no current resume, create one
+  // Create a new resume if none exists
   useEffect(() => {
     if (!currentResume && pageLoaded) {
       createNewResume('My Resume');
@@ -69,41 +75,60 @@ const Builder: React.FC = () => {
         return;
       }
 
-      toast.success('Resume parsed successfully! Analyzing...');
+      toast.success('Resume parsed successfully! Populating editor...');
 
-      // Update resume sections using existing store methods
-      if (result.parsed.contact) {
-        updateSection('contact', result.parsed.contact);
-      }
-      if (result.parsed.summary) {
-        updateSection('summary', result.parsed.summary);
-      }
-      if (result.parsed.experience && result.parsed.experience.length > 0) {
-        result.parsed.experience.forEach((exp: any) => {
-          addItem('experience', exp);
-        });
-      }
-      if (result.parsed.education && result.parsed.education.length > 0) {
-        result.parsed.education.forEach((edu: any) => {
-          addItem('education', edu);
-        });
-      }
-      if (result.parsed.skills) {
-        updateSection('skills', result.parsed.skills);
-      }
-      if (result.parsed.certifications && result.parsed.certifications.length > 0) {
-        result.parsed.certifications.forEach((cert: any) => {
-          addItem('certifications', cert);
-        });
-      }
-      if (result.parsed.projects && result.parsed.projects.length > 0) {
-        result.parsed.projects.forEach((proj: any) => {
-          addItem('projects', proj);
-        });
-      }
+      // Build complete resume data with parsed sections
+      const parsedResume = {
+        ...currentResume!,
+        sections: {
+          ...currentResume!.sections,
+          // Contact info
+          contact: {
+            ...currentResume!.sections.contact,
+            ...(result.parsed.contact || {}),
+          },
+          // Summary
+          summary: result.parsed.summary || currentResume!.sections.summary,
+          // Experience - replace with parsed
+          experience: result.parsed.experience && result.parsed.experience.length > 0 
+            ? result.parsed.experience 
+            : currentResume!.sections.experience,
+          // Education - replace with parsed
+          education: result.parsed.education && result.parsed.education.length > 0 
+            ? result.parsed.education 
+            : currentResume!.sections.education,
+          // Skills
+          skills: result.parsed.skills 
+            ? { ...currentResume!.sections.skills, ...result.parsed.skills }
+            : currentResume!.sections.skills,
+          // Certifications
+          certifications: result.parsed.certifications && result.parsed.certifications.length > 0
+            ? result.parsed.certifications
+            : currentResume!.sections.certifications,
+          // Projects
+          projects: result.parsed.projects && result.parsed.projects.length > 0
+            ? result.parsed.projects
+            : currentResume!.sections.projects,
+          // Languages
+          languages: result.parsed.languages && result.parsed.languages.length > 0
+            ? result.parsed.languages
+            : currentResume!.sections.languages,
+        },
+        metadata: {
+          ...currentResume!.metadata,
+          updatedAt: new Date().toISOString(),
+        },
+      };
 
-      // Run AI analysis
+      // Update the resume in the store - this triggers the preview to update
+      setCurrentResume(parsedResume);
+
+      toast.success('Resume populated! Running AI analysis...');
+
+      // Run AI analysis on the raw text
       await analyzeResume(result.rawText);
+
+      toast.success('Analysis complete! Edit your resume to improve your score.');
     } catch (error: any) {
       toast.error('Failed to parse resume: ' + error.message);
     } finally {
@@ -122,10 +147,10 @@ const Builder: React.FC = () => {
       const recommendations = await aiService.getRecommendations(resumeText, score);
       setAIRecommendations(recommendations);
 
-      toast.success(`ATS Score: ${score.overall}/100`);
+      toast.success(`ATS Score: ${score.overall}/100 - ${recommendations.length} recommendations`);
     } catch (error: any) {
       console.error('AI Analysis error:', error);
-      toast.error('AI analysis failed. Please try again.');
+      // Don't show error toast - the resume is still populated
     } finally {
       setAILoading(false);
     }
@@ -142,29 +167,46 @@ const Builder: React.FC = () => {
       resumeText += `${sections.contact.email} | ${sections.contact.phone}\n\n`;
     }
     if (sections.summary?.content) {
-      resumeText += `${sections.summary.content}\n\n`;
+      resumeText += `PROFESSIONAL SUMMARY\n${sections.summary.content}\n\n`;
     }
     if (sections.experience?.length) {
       resumeText += 'EXPERIENCE\n';
       sections.experience.forEach((exp: any) => {
-        resumeText += `${exp.position} at ${exp.company}\n${exp.description}\n`;
-        if (exp.achievements) exp.achievements.forEach((a: string) => resumeText += `- ${a}\n`);
+        resumeText += `${exp.position} at ${exp.company}\n`;
+        resumeText += `${exp.startDate || ''} - ${exp.current ? 'Present' : exp.endDate || ''}\n`;
+        resumeText += `${exp.description || ''}\n`;
+        if (exp.achievements) {
+          exp.achievements.forEach((a: string) => {
+            if (a.trim()) resumeText += `• ${a}\n`;
+          });
+        }
         resumeText += '\n';
       });
     }
     if (sections.education?.length) {
       resumeText += 'EDUCATION\n';
       sections.education.forEach((edu: any) => {
-        resumeText += `${edu.degree} - ${edu.institution}\n\n`;
+        resumeText += `${edu.degree || ''} in ${edu.field || ''}\n`;
+        resumeText += `${edu.institution || ''}\n`;
+        resumeText += `${edu.startDate || ''} - ${edu.endDate || ''}\n\n`;
       });
     }
     if (sections.skills) {
-      const skills = [
+      const allSkills = [
         ...(sections.skills.technical || []).map((s: any) => s.name),
         ...(sections.skills.soft || []).map((s: any) => s.name),
         ...(sections.skills.tools || []).map((s: any) => s.name),
-      ];
-      if (skills.length) resumeText += `SKILLS: ${skills.join(', ')}\n`;
+      ].filter(Boolean);
+      if (allSkills.length) {
+        resumeText += `SKILLS\n${allSkills.join(', ')}\n\n`;
+      }
+    }
+    if (sections.certifications?.length) {
+      resumeText += 'CERTIFICATIONS\n';
+      sections.certifications.forEach((cert: any) => {
+        resumeText += `• ${cert.name} - ${cert.issuer}\n`;
+      });
+      resumeText += '\n';
     }
 
     await analyzeResume(resumeText);
@@ -201,7 +243,7 @@ const Builder: React.FC = () => {
     return (
       <Loading 
         type="page" 
-        text={parsing ? 'Analyzing your resume...' : 'Loading resume builder...'} 
+        text={parsing ? 'Analyzing your resume and populating the editor...' : 'Loading resume builder...'} 
         fullScreen 
       />
     );
@@ -220,6 +262,15 @@ const Builder: React.FC = () => {
           </h1>
           {isDirty && <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" title="Unsaved changes" />}
           {aiLoading && <span className="text-xs text-blue-600 animate-pulse">Analyzing...</span>}
+          {atsScore && (
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              atsScore.overall >= 80 ? 'bg-green-100 text-green-700' :
+              atsScore.overall >= 60 ? 'bg-yellow-100 text-yellow-700' :
+              'bg-red-100 text-red-700'
+            }`}>
+              ATS: {atsScore.overall}/100
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -243,7 +294,11 @@ const Builder: React.FC = () => {
       </div>
 
       <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload Your Resume" size="md">
-        <FileUpload onFileSelect={handleFileUpload} label="Upload Resume" description="Upload your existing resume (PDF, DOCX, or TXT) for AI analysis and optimization" />
+        <FileUpload 
+          onFileSelect={handleFileUpload} 
+          label="Upload Resume" 
+          description="Upload your existing resume (PDF, DOCX, or TXT). We'll extract the information and populate the editor automatically." 
+        />
       </Modal>
 
       <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Download Resume" size="sm">
