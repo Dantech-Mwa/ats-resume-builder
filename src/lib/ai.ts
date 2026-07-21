@@ -350,34 +350,46 @@ class ATSScoringEngine {
     const grammarScore = this.scoreGrammar(text);
     const contactScore = this.scoreContact(text);
 
-    let weights = {
-      keywordOptimization: 0.25,
-      formattingScore: 0.15,
-      contentQuality: 0.15,
+    // COMPLETE weights that sum to 1.0
+    let weights: Record<string, number> = {
+      keywordOptimization: 0.20,
+      formattingScore: 0.10,
+      contentQuality: 0.10,
       sectionCompleteness: 0.15,
       actionVerbs: 0.10,
       quantifiableResults: 0.10,
       grammarAndSpelling: 0.05,
       contactInfoQuality: 0.05,
+      skillsRelevance: 0.10,
+      overallReadability: 0.05,
     };
 
     if (profile?.weightOverrides) {
       weights = { ...weights, ...profile.weightOverrides };
+      // Ensure weights still sum to ~1.0
+      const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+      if (totalWeight > 0 && totalWeight !== 1) {
+        for (const key of Object.keys(weights)) {
+          weights[key] = weights[key] / totalWeight;
+        }
+      }
     }
 
     const overall = Math.round(
-      (keywordScore * weights.keywordOptimization) +
-      (formattingScore * weights.formattingScore) +
-      (contentScore * weights.contentQuality) +
-      (sectionScore * weights.sectionCompleteness) +
-      (verbScore * weights.actionVerbs) +
-      (quantifiableScore * weights.quantifiableResults) +
-      (grammarScore * weights.grammarAndSpelling) +
-      (contactScore * weights.contactInfoQuality)
+      (keywordScore * (weights.keywordOptimization || 0)) +
+      (formattingScore * (weights.formattingScore || 0)) +
+      (contentScore * (weights.contentQuality || 0)) +
+      (sectionScore * (weights.sectionCompleteness || 0)) +
+      (verbScore * (weights.actionVerbs || 0)) +
+      (quantifiableScore * (weights.quantifiableResults || 0)) +
+      (grammarScore * (weights.grammarAndSpelling || 0)) +
+      (contactScore * (weights.contactInfoQuality || 0)) +
+      (keywordScore * (weights.skillsRelevance || 0)) +
+      (contentScore * (weights.overallReadability || 0))
     );
 
     return {
-      overall: Math.min(100, Math.max(0, overall)),
+      overall: isNaN(overall) ? 50 : Math.min(100, Math.max(0, overall)),
       breakdown: {
         keywordOptimization: keywordScore,
         formattingScore,
