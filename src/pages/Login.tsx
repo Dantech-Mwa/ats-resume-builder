@@ -1,5 +1,5 @@
 // ============================================
-// LOGIN PAGE - Google, Facebook & GitHub
+// LOGIN PAGE - Google + Email Only
 // ============================================
 
 import React, { useState, useEffect } from 'react';
@@ -13,7 +13,6 @@ import {
   MdArrowForward,
 } from 'react-icons/md';
 import { FcGoogle } from 'react-icons/fc';
-import { FaFacebook, FaGithub } from 'react-icons/fa';
 import { useAuth } from '../store';
 import { authService } from '../lib/firebase';
 import { isValidEmail } from '../lib/utils';
@@ -30,12 +29,11 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   const from = (location.state as any)?.from?.pathname || '/dashboard';
 
-  // Redirect if already logged in
   useEffect(() => {
     if (isAuthenticated && user) {
       navigate(from, { replace: true });
@@ -78,30 +76,17 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleSocialLogin = async (provider: string) => {
-    setSocialLoading(provider);
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
     try {
-      let user;
-      switch (provider) {
-        case 'google':
-          user = await authService.loginWithGoogle();
-          break;
-        case 'facebook':
-          user = await authService.loginWithFacebook();
-          break;
-        case 'github':
-          user = await authService.loginWithGithub();
-          break;
-        default:
-          throw new Error('Invalid provider');
-      }
+      const user = await authService.loginWithGoogle();
       login(user);
       toast.success('Welcome!');
       navigate(from, { replace: true });
     } catch (error: any) {
-      toast.error(error.message || `${provider} login failed`);
+      toast.error(error.message || 'Google login failed');
     } finally {
-      setSocialLoading(null);
+      setGoogleLoading(false);
     }
   };
 
@@ -112,7 +97,6 @@ const Login: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="bg-white rounded-2xl shadow-strong w-full max-w-md p-8"
       >
-        {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-4">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
@@ -124,48 +108,19 @@ const Login: React.FC = () => {
           <p className="text-gray-500 mt-2">Sign in to continue building your resume</p>
         </div>
 
-        {/* Social Login Buttons */}
-        <div className="space-y-3 mb-6">
-          <button
-            onClick={() => handleSocialLogin('google')}
-            disabled={!!socialLoading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
-          >
-            {socialLoading === 'google' ? (
-              <Loading type="spinner" size="sm" />
-            ) : (
-              <FcGoogle className="w-5 h-5" />
-            )}
-            Continue with Google
-          </button>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => handleSocialLogin('facebook')}
-              disabled={!!socialLoading}
-              className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50"
-            >
-              {socialLoading === 'facebook' ? (
-                <Loading type="spinner" size="sm" />
-              ) : (
-                <FaFacebook className="w-5 h-5 text-[#1877F2]" />
-              )}
-              Facebook
-            </button>
-            <button
-              onClick={() => handleSocialLogin('github')}
-              disabled={!!socialLoading}
-              className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50"
-            >
-              {socialLoading === 'github' ? (
-                <Loading type="spinner" size="sm" />
-              ) : (
-                <FaGithub className="w-5 h-5" />
-              )}
-              GitHub
-            </button>
-          </div>
-        </div>
+        {/* Google Login */}
+        <button
+          onClick={handleGoogleLogin}
+          disabled={googleLoading}
+          className="w-full mb-6 flex items-center justify-center gap-3 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+        >
+          {googleLoading ? (
+            <Loading type="spinner" size="sm" />
+          ) : (
+            <FcGoogle className="w-5 h-5" />
+          )}
+          Continue with Google
+        </button>
 
         {/* Divider */}
         <div className="relative mb-6">
@@ -199,15 +154,11 @@ const Login: React.FC = () => {
                 autoComplete="email"
               />
             </div>
-            {errors.email && (
-              <p className="text-red-500 text-xs mt-1.5">{errors.email}</p>
-            )}
+            {errors.email && <p className="text-red-500 text-xs mt-1.5">{errors.email}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Password
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
             <div className="relative">
               <MdLock className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
@@ -228,16 +179,10 @@ const Login: React.FC = () => {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                {showPassword ? (
-                  <MdVisibilityOff className="w-5 h-5" />
-                ) : (
-                  <MdVisibility className="w-5 h-5" />
-                )}
+                {showPassword ? <MdVisibilityOff className="w-5 h-5" /> : <MdVisibility className="w-5 h-5" />}
               </button>
             </div>
-            {errors.password && (
-              <p className="text-red-500 text-xs mt-1.5">{errors.password}</p>
-            )}
+            {errors.password && <p className="text-red-500 text-xs mt-1.5">{errors.password}</p>}
           </div>
 
           <div className="flex items-center justify-between">
@@ -250,10 +195,7 @@ const Login: React.FC = () => {
               />
               <span className="text-sm text-gray-600">Remember me</span>
             </label>
-            <Link
-              to="/forgot-password"
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
+            <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
               Forgot password?
             </Link>
           </div>
@@ -279,10 +221,7 @@ const Login: React.FC = () => {
 
         <p className="text-center mt-6 text-gray-600">
           Don't have an account?{' '}
-          <Link
-            to="/register"
-            className="text-blue-600 hover:text-blue-700 font-semibold"
-          >
+          <Link to="/register" className="text-blue-600 hover:text-blue-700 font-semibold">
             Create one
           </Link>
         </p>
