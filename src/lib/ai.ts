@@ -338,76 +338,85 @@ export class ScoreConsistencyEngine {
 
 class ATSScoringEngine {
   static scoreResume(text: string, industryKey?: string): ATSScore {
-    const normalizedText = text.toLowerCase();
-    const profile = industryKey ? INDUSTRY_PROFILES[industryKey] : null;
+  const normalizedText = text.toLowerCase();
+  const profile = industryKey ? INDUSTRY_PROFILES[industryKey] : null;
 
-    const keywordScore = this.scoreKeywords(normalizedText, profile);
-    const formattingScore = this.scoreFormatting(text);
-    const contentScore = this.scoreContent(text);
-    const sectionScore = this.scoreSections(normalizedText, profile);
-    const verbScore = this.scoreActionVerbs(normalizedText);
-    const quantifiableScore = this.scoreQuantifiable(normalizedText);
-    const grammarScore = this.scoreGrammar(text);
-    const contactScore = this.scoreContact(text);
+  const keywordScore = this.scoreKeywords(normalizedText, profile);
+  const formattingScore = this.scoreFormatting(text);
+  const contentScore = this.scoreContent(text);
+  const sectionScore = this.scoreSections(normalizedText, profile);
+  const verbScore = this.scoreActionVerbs(normalizedText);
+  const quantifiableScore = this.scoreQuantifiable(normalizedText);
+  const grammarScore = this.scoreGrammar(text);
+  const contactScore = this.scoreContact(text);
 
-    // COMPLETE weights that sum to 1.0
-    let weights: Record<string, number> = {
-      keywordOptimization: 0.20,
-      formattingScore: 0.10,
-      contentQuality: 0.10,
-      sectionCompleteness: 0.15,
-      actionVerbs: 0.10,
-      quantifiableResults: 0.10,
-      grammarAndSpelling: 0.05,
-      contactInfoQuality: 0.05,
-      skillsRelevance: 0.10,
-      overallReadability: 0.05,
-    };
+  // Define default component scores map
+  const scores: Record<string, number> = {
+    keywordOptimization: keywordScore,
+    formattingScore: formattingScore,
+    contentQuality: contentScore,
+    sectionCompleteness: sectionScore,
+    actionVerbs: verbScore,
+    quantifiableResults: quantifiableScore,
+    grammarAndSpelling: grammarScore,
+    contactInfoQuality: contactScore,
+    skillsRelevance: keywordScore,
+    overallReadability: contentScore,
+  };
 
-    if (profile?.weightOverrides) {
-      weights = { ...weights, ...profile.weightOverrides };
-      // Ensure weights still sum to ~1.0
-      const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
-      if (totalWeight > 0 && totalWeight !== 1) {
-        for (const key of Object.keys(weights)) {
-          weights[key] = weights[key] / totalWeight;
-        }
-      }
-    }
+  // Base weights map
+  let weights: Record<string, number> = {
+    keywordOptimization: 0.20,
+    formattingScore: 0.10,
+    contentQuality: 0.10,
+    sectionCompleteness: 0.15,
+    actionVerbs: 0.10,
+    quantifiableResults: 0.10,
+    grammarAndSpelling: 0.05,
+    contactInfoQuality: 0.05,
+    skillsRelevance: 0.10,
+    overallReadability: 0.05,
+  };
 
-    const overall = Math.round(
-      (keywordScore * (weights.keywordOptimization || 0)) +
-      (formattingScore * (weights.formattingScore || 0)) +
-      (contentScore * (weights.contentQuality || 0)) +
-      (sectionScore * (weights.sectionCompleteness || 0)) +
-      (verbScore * (weights.actionVerbs || 0)) +
-      (quantifiableScore * (weights.quantifiableResults || 0)) +
-      (grammarScore * (weights.grammarAndSpelling || 0)) +
-      (contactScore * (weights.contactInfoQuality || 0)) +
-      (keywordScore * (weights.skillsRelevance || 0)) +
-      (contentScore * (weights.overallReadability || 0))
-    );
-
-    return {
-      overall: isNaN(overall) ? 50 : Math.min(100, Math.max(0, overall)),
-      breakdown: {
-        keywordOptimization: keywordScore,
-        formattingScore,
-        contentQuality: contentScore,
-        sectionCompleteness: sectionScore,
-        actionVerbs: verbScore,
-        quantifiableResults: quantifiableScore,
-        grammarAndSpelling: grammarScore,
-        contactInfoQuality: contactScore,
-        skillsRelevance: keywordScore,
-        overallReadability: contentScore,
-      },
-      missingKeywords: this.getMissingKeywords(normalizedText, profile),
-      improvementTips: this.getImprovementTips(text, overall),
-      criticalIssues: this.getCriticalIssues(text),
-      analyzedAt: new Date().toISOString(),
-    };
+  // Safely apply overrides
+  if (profile?.weightOverrides) {
+    weights = { ...weights, ...profile.weightOverrides };
   }
+
+  // Calculate sum of weights safely
+  const totalWeight = Object.values(weights).reduce((sum, w) => sum + (Number(w) || 0), 0);
+
+  // Compute weighted sum dynamic loop (prevents manual NaN additions)
+  let rawSum = 0;
+  for (const [key, weight] of Object.entries(weights)) {
+    const componentScore = scores[key] ?? 50; // Fallback to 50 if key missing
+    const normalizedWeight = totalWeight > 0 ? (weight / totalWeight) : 0;
+    rawSum += componentScore * normalizedWeight;
+  }
+
+  const overallCalculated = Math.round(rawSum);
+  const overall = isNaN(overallCalculated) ? 50 : Math.min(100, Math.max(0, overallCalculated));
+
+  return {
+    overall,
+    breakdown: {
+      keywordOptimization: keywordScore,
+      formattingScore,
+      contentQuality: contentScore,
+      sectionCompleteness: sectionScore,
+      actionVerbs: verbScore,
+      quantifiableResults: quantifiableScore,
+      grammarAndSpelling: grammarScore,
+      contactInfoQuality: contactScore,
+      skillsRelevance: keywordScore,
+      overallReadability: contentScore,
+    },
+    missingKeywords: this.getMissingKeywords(normalizedText, profile),
+    improvementTips: this.getImprovementTips(text, overall),
+    criticalIssues: this.getCriticalIssues(text),
+    analyzedAt: new Date().toISOString(),
+  };
+} 
 
   private static scoreKeywords(text: string, profile?: IndustryProfile | null): number {
     let found = 0;
