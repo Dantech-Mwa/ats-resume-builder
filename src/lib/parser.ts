@@ -1,10 +1,14 @@
 // ============================================
-// RESUME PARSER - PDF, DOCX, TXT
+// RESUME PARSER - Browser-Compatible PDF, DOCX, TXT
 // ============================================
 
 import mammoth from 'mammoth';
+import * as pdfjsLib from 'pdfjs-dist';
 import { ResumeSections, ContactInfo, WorkExperience, Education, ResumeImportResult } from './types';
 import { v4 as uuidv4 } from 'uuid';
+
+// Set PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 class ResumeParser {
   private static instance: ResumeParser;
@@ -25,7 +29,6 @@ class ResumeParser {
     const warnings: string[] = [];
 
     try {
-      // Validate file
       const validation = this.validateFile(file);
       if (!validation.valid) {
         return {
@@ -37,7 +40,6 @@ class ResumeParser {
         };
       }
 
-      // Extract text based on file type
       let text = '';
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
 
@@ -58,14 +60,12 @@ class ResumeParser {
       }
 
       if (!text.trim()) {
-        errors.push('Could not extract text from the file. The file might be empty or corrupted.');
+        errors.push('Could not extract text from the file. The file might be empty or scanned.');
         return { success: false, parsed: {}, errors, warnings, rawText: '' };
       }
 
-      // Parse sections from text
       const sections = this.extractSections(text);
 
-      // Check for common issues
       if (!sections.contact?.email) {
         warnings.push('No email address found in the resume.');
       }
@@ -102,12 +102,6 @@ class ResumeParser {
   private validateFile(file: File): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
     const maxSize = 10 * 1024 * 1024; // 10MB
-    const allowedTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword',
-      'text/plain',
-    ];
     const allowedExtensions = ['pdf', 'docx', 'doc', 'txt'];
 
     if (!file) {
@@ -128,41 +122,62 @@ class ResumeParser {
   }
 
   // ============================================
-  // PDF PARSING
+  // BROWSER-COMPATIBLE PDF PARSING (pdfjs-dist)
   // ============================================
 
   private async parsePDF(file: File): Promise<string> {
     try {
       const arrayBuffer = await file.arrayBuffer();
       
-      // Dynamically import pdf-parse
-      const pdfParse = (await import('pdf-parse')).default;
+      // Load PDF using pdfjs-dist
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
       
-      // Convert ArrayBuffer to Buffer-like object
-      const buffer = new Uint8Array(arrayBuffer);
-      const data = await pdfParse(Buffer.from(buffer));
+      let fullText = '';
       
-      return data.text || '';
+      // Extract text from each page
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        
+        // Combine text items
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        
+        fullText += pageText + '\n';
+      }
+
+      if (!fullText.trim()) {
+        throw new Error('No text content found in PDF');
+      }
+
+      return this.cleanPDFText(fullText);
     } catch (error: any) {
       console.error('PDF Parsing Error:', error);
       
-      // Fallback: Try to extract text using basic method
+      // Fallback: Try to read as text directly (for text-based PDFs)
       try {
         const text = await file.text();
-        return this.cleanPDFText(text);
+        const cleaned = this.cleanPDFText(text);
+        if (cleaned.length > 50) {
+          return cleaned;
+        }
       } catch {
-        throw new Error('Failed to parse PDF file. The file might be scanned or image-based.');
+        // Fallback failed
       }
+      
+      throw new Error('Failed to parse PDF file. The file might be scanned or image-based. Please upload a text-based PDF.');
     }
   }
 
   private cleanPDFText(text: string): string {
-    // Remove PDF artifacts and clean up text
     return text
       .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control characters
       .replace(/\f/g, '\n') // Form feed to newline
       .replace(/\r\n/g, '\n') // Normalize line endings
       .replace(/\n{3,}/g, '\n\n') // Reduce multiple newlines
+      .replace(/\s{2,}/g, ' ') // Reduce multiple spaces
       .trim();
   }
 
@@ -179,7 +194,6 @@ class ResumeParser {
         throw new Error('No text extracted from DOCX');
       }
 
-      // Log any warnings from mammoth
       if (result.messages.length > 0) {
         console.warn('DOCX Parsing Warnings:', result.messages);
       }
@@ -212,13 +226,10 @@ class ResumeParser {
   private extractSections(text: string): Partial<ResumeSections> {
     const sections: Partial<ResumeSections> = {};
 
-    // Extract contact information
     sections.contact = this.extractContactInfo(text);
 
-    // Split text into sections based on common headers
     const sectionMap = this.splitIntoSections(text);
 
-    // Extract each section
     sections.summary = {
       content: sectionMap.get('summary') || sectionMap.get('objective') || sectionMap.get('profile') || '',
       aiOptimized: false,
@@ -263,23 +274,19 @@ class ResumeParser {
       country: '',
     };
 
-    // Extract name (usually first line)
     const lines = text.split('\n').filter(line => line.trim());
     if (lines.length > 0) {
       const firstLine = lines[0].trim();
-      // Check if first line looks like a name (not email, phone, etc.)
       if (!firstLine.includes('@') && !firstLine.match(/^[\d\s\+\-\(\)]+$/)) {
         contact.fullName = firstLine;
       }
     }
 
-    // Extract email
     const emailMatch = text.match(/[\w\.-]+@[\w\.-]+\.\w{2,}/);
     if (emailMatch) {
       contact.email = emailMatch[0];
     }
 
-    // Extract phone (various formats)
     const phonePatterns = [
       /(?:\+\d{1,3}[\s\-]?)?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}/,
       /\+\d{1,3}[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{4}/,
@@ -294,37 +301,14 @@ class ResumeParser {
       }
     }
 
-    // Extract LinkedIn
     const linkedInMatch = text.match(/linkedin\.com\/in\/[\w\-]+/i);
     if (linkedInMatch) {
       contact.linkedIn = `https://www.${linkedInMatch[0]}`;
     }
 
-    // Extract GitHub
     const githubMatch = text.match(/github\.com\/[\w\-]+/i);
     if (githubMatch) {
       contact.github = `https://www.${githubMatch[0]}`;
-    }
-
-    // Extract portfolio
-    const portfolioMatch = text.match(/(?:portfolio|website):?\s*(https?:\/\/[\w\.\-]+)/i);
-    if (portfolioMatch) {
-      contact.portfolio = portfolioMatch[1];
-    }
-
-    // Extract location (city, state, country patterns)
-    const locationPatterns = [
-      /([A-Z][a-z]+,\s*[A-Z]{2})/,
-      /([A-Z][a-z]+,\s*[A-Z][a-z]+)/,
-      /(?:location|address):?\s*([^\n]+)/i,
-    ];
-
-    for (const pattern of locationPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        contact.location = match[1].trim();
-        break;
-      }
     }
 
     return contact;
@@ -337,7 +321,6 @@ class ResumeParser {
   private splitIntoSections(text: string): Map<string, string> {
     const sectionMap = new Map<string, string>();
     
-    // Common section headers with variations
     const sectionHeaders = [
       'summary', 'professional summary', 'objective', 'profile',
       'experience', 'work experience', 'employment', 'work history',
@@ -351,7 +334,6 @@ class ResumeParser {
       'languages', 'language proficiency',
     ];
 
-    // Find section boundaries
     const lines = text.split('\n');
     let currentSection = 'header';
     let currentContent: string[] = [];
@@ -365,11 +347,9 @@ class ResumeParser {
       );
 
       if (matchedHeader && trimmedLine.length < 50) {
-        // Save previous section
         if (currentContent.length > 0) {
           sectionMap.set(currentSection, currentContent.join('\n').trim());
         }
-        // Start new section
         currentSection = matchedHeader;
         currentContent = [];
       } else {
@@ -377,12 +357,10 @@ class ResumeParser {
       }
     }
 
-    // Save last section
     if (currentContent.length > 0) {
       sectionMap.set(currentSection, currentContent.join('\n').trim());
     }
 
-    // If no sections found, put everything in a default section
     if (sectionMap.size === 0) {
       sectionMap.set('general', text);
     }
@@ -398,37 +376,24 @@ class ResumeParser {
     if (!text.trim()) return [];
 
     const experiences: WorkExperience[] = [];
+    const lines = text.split('\n').filter(line => line.trim());
     
-    // Split by common date patterns or company headers
-    const datePattern = /(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}\s*(?:-|–|to)\s*(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|Present|Current)\b)/gi;
-    
-    const blocks = text.split(datePattern);
-    
-    // Process blocks to extract experience entries
     let currentCompany = '';
     let currentPosition = '';
     let currentDescription: string[] = [];
     let currentStartDate = '';
     let currentEndDate = '';
 
-    const lines = text.split('\n');
-    
+    const datePattern = /(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}\s*(?:-|–|to)\s*(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|Present|Current)\b)/gi;
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      
       if (!line) continue;
 
-      // Check for date patterns
       const dateMatch = line.match(datePattern);
-      
-      // Check if line looks like a job title/company header
-      const isHeader = !line.startsWith('•') && 
-                       !line.startsWith('-') && 
-                       !line.startsWith('*') &&
-                       line.length < 100;
+      const isHeader = !line.startsWith('•') && !line.startsWith('-') && !line.startsWith('*') && line.length < 100;
 
       if (isHeader && (dateMatch || i === 0 || !lines[i-1]?.trim())) {
-        // Save previous experience if exists
         if (currentCompany || currentPosition) {
           experiences.push({
             id: uuidv4(),
@@ -445,14 +410,12 @@ class ResumeParser {
           });
         }
 
-        // Reset for new experience
         currentCompany = line;
         currentPosition = '';
         currentDescription = [];
         currentStartDate = '';
         currentEndDate = '';
 
-        // Extract dates
         if (dateMatch) {
           const dates = dateMatch[0].split(/\s*(?:-|–|to)\s*/);
           currentStartDate = dates[0]?.trim() || '';
@@ -463,7 +426,6 @@ class ResumeParser {
       }
     }
 
-    // Save last experience
     if (currentCompany || currentPosition) {
       experiences.push({
         id: uuidv4(),
@@ -495,11 +457,8 @@ class ResumeParser {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      
-      // Skip empty lines
       if (!line) continue;
 
-      // Check for degree patterns
       const degreePatterns = [
         /(?:Bachelor|Master|Doctorate|Ph\.?D|MBA|B\.?S\.?|M\.?S\.?|B\.?A\.?|M\.?A\.?|Associate)/i,
         /(?:degree|diploma|certificate)/i,
@@ -520,14 +479,12 @@ class ResumeParser {
           relevantCourses: [],
         };
 
-        // Try to get institution from next or previous line
         if (i + 1 < lines.length && !degreePatterns.some(p => p.test(lines[i+1]))) {
           edu.institution = lines[i + 1].trim();
         } else if (i > 0 && !degreePatterns.some(p => p.test(lines[i-1]))) {
           edu.institution = lines[i - 1].trim();
         }
 
-        // Extract GPA
         const gpaMatch = line.match(/GPA:?\s*([\d.]+)/i);
         if (gpaMatch) {
           edu.gpa = gpaMatch[1];
@@ -546,16 +503,9 @@ class ResumeParser {
 
   private extractSkills(text: string): any {
     if (!text.trim()) {
-      return {
-        technical: [],
-        soft: [],
-        languages: [],
-        tools: [],
-        other: [],
-      };
+      return { technical: [], soft: [], languages: [], tools: [], other: [] };
     }
 
-    // Split by common delimiters
     const skillsList = text
       .split(/[,;•\-\n•\|\/]/)
       .map(skill => skill.trim())
@@ -581,7 +531,6 @@ class ResumeParser {
 
     skillsList.forEach(skill => {
       const lowerSkill = skill.toLowerCase();
-      
       if (techKeywords.some(keyword => lowerSkill.includes(keyword))) {
         technicalSkills.push(skill);
       } else if (softKeywords.some(keyword => lowerSkill.includes(keyword))) {
@@ -589,26 +538,20 @@ class ResumeParser {
       } else if (lowerSkill.includes('tool') || lowerSkill.includes('software')) {
         tools.push(skill);
       } else {
-        technicalSkills.push(skill); // Default to technical
+        technicalSkills.push(skill);
       }
     });
 
     return {
       technical: technicalSkills.slice(0, 20).map(name => ({
-        name,
-        level: 'Intermediate' as const,
-        category: 'Technical',
+        name, level: 'Intermediate' as const, category: 'Technical',
       })),
       soft: softSkills.slice(0, 10).map(name => ({
-        name,
-        level: 'Intermediate' as const,
-        category: 'Soft Skills',
+        name, level: 'Intermediate' as const, category: 'Soft Skills',
       })),
       languages: [],
       tools: tools.slice(0, 10).map(name => ({
-        name,
-        level: 'Intermediate' as const,
-        category: 'Tools',
+        name, level: 'Intermediate' as const, category: 'Tools',
       })),
       other: [],
     };
@@ -620,22 +563,15 @@ class ResumeParser {
 
   private extractCertifications(text: string): any[] {
     if (!text.trim()) return [];
-
     const certifications: any[] = [];
     const lines = text.split('\n').filter(line => line.trim());
-
     lines.forEach(line => {
       if (line.trim().length > 5) {
         certifications.push({
-          id: uuidv4(),
-          name: line.trim(),
-          issuer: '',
-          date: '',
-          inProgress: false,
+          id: uuidv4(), name: line.trim(), issuer: '', date: '', inProgress: false,
         });
       }
     });
-
     return certifications.slice(0, 10);
   }
 
@@ -645,46 +581,28 @@ class ResumeParser {
 
   private extractProjects(text: string): any[] {
     if (!text.trim()) return [];
-
     const projects: any[] = [];
     const lines = text.split('\n').filter(line => line.trim());
-
     let currentProject: any = null;
 
     lines.forEach(line => {
       const trimmed = line.trim();
-      
-      // Check if line looks like a project title
       if (trimmed.length < 100 && !trimmed.startsWith('•') && !trimmed.startsWith('-')) {
-        if (currentProject) {
-          projects.push(currentProject);
-        }
+        if (currentProject) projects.push(currentProject);
         currentProject = {
-          id: uuidv4(),
-          name: trimmed,
-          description: '',
-          technologies: [],
-          achievements: [],
-          role: '',
-          current: false,
+          id: uuidv4(), name: trimmed, description: '',
+          technologies: [], achievements: [], role: '', current: false,
         };
       } else if (currentProject) {
         currentProject.description += trimmed + '\n';
-        
-        // Extract technologies
         const techMatch = trimmed.match(/(?:technologies|tech stack|built with):\s*(.+)/i);
         if (techMatch) {
-          currentProject.technologies = techMatch[1]
-            .split(/[,;]/)
-            .map((t: string) => t.trim());
+          currentProject.technologies = techMatch[1].split(/[,;]/).map((t: string) => t.trim());
         }
       }
     });
 
-    if (currentProject) {
-      projects.push(currentProject);
-    }
-
+    if (currentProject) projects.push(currentProject);
     return projects.slice(0, 10);
   }
 
@@ -703,12 +621,10 @@ class ResumeParser {
     languagePatterns.forEach(lang => {
       const pattern = new RegExp(`${lang}\\s*(?:\\(([^)]+)\\))?`, 'i');
       const match = text.match(pattern);
-      
       if (match) {
-        const proficiency = match[1] || 'Intermediate';
         languages.push({
           name: lang,
-          proficiency: this.mapProficiency(proficiency),
+          proficiency: this.mapProficiency(match[1] || 'Intermediate'),
         });
       }
     });
@@ -717,11 +633,11 @@ class ResumeParser {
   }
 
   private mapProficiency(text: string): 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic' {
-    const text_lower = text.toLowerCase();
-    if (text_lower.includes('native')) return 'Native';
-    if (text_lower.includes('fluent')) return 'Fluent';
-    if (text_lower.includes('advanced')) return 'Advanced';
-    if (text_lower.includes('basic') || text_lower.includes('beginner')) return 'Basic';
+    const t = text.toLowerCase();
+    if (t.includes('native')) return 'Native';
+    if (t.includes('fluent')) return 'Fluent';
+    if (t.includes('advanced')) return 'Advanced';
+    if (t.includes('basic') || t.includes('beginner')) return 'Basic';
     return 'Intermediate';
   }
 }
