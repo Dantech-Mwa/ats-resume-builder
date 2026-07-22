@@ -173,8 +173,11 @@ export interface Certification {
   credentialId?: string;
   credentialUrl?: string;
   inProgress: boolean;
+  // NEW: Fields used by parser.ts
+  skillsValidated?: string[];
+  annualRenewal?: boolean;
+  isActive?: boolean;
 }
-
 export interface Project {
   id: string;
   name: string;
