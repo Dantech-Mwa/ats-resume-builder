@@ -425,26 +425,12 @@ export interface AIChatMessage {
   suggestions?: string[];
 }
 
-// -------------------------------------------
-// TEMPLATE TYPES
-// -------------------------------------------
+// ============================================
+// TEMPLATE TYPES - Updated
+// ============================================
 
-export type TemplateCategory = 'professional' | 'creative' | 'academic' | 'executive' | 'modern';
-
-export interface TemplateConfig {
-  id: string;
-  name: string;
-  category: TemplateCategory;
-  description: string;
-  previewImage: string;
-  colors: TemplateColors;
-  fonts: TemplateFonts;
-  layout: TemplateLayout;
-  sections: TemplateSectionConfig[];
-  atsCompatibility: number;
-  popularity: number;
-  isPremium: boolean;
-}
+export type TemplateCategory = 'professional' | 'creative' | 'academic' | 'executive' | 'modern' | 'simple' | 'technical';
+export type TemplateStyle = 'minimal' | 'elegant' | 'bold' | 'classic' | 'contemporary' | 'structured' | 'modern';
 
 export interface TemplateColors {
   primary: string;
@@ -454,6 +440,14 @@ export interface TemplateColors {
   background: string;
   headingText: string;
   borderColor: string;
+  // NEW: Extended color properties for advanced templates
+  linkColor?: string;
+  bulletColor?: string;
+  dividerColor?: string;
+  highlightColor?: string;
+  successColor?: string;
+  errorColor?: string;
+  warningColor?: string;
 }
 
 export interface TemplateFonts {
@@ -465,15 +459,29 @@ export interface TemplateFonts {
     headings: string;
     body: string;
     small: string;
+    xSmall?: string;
+    large?: string;
+  };
+  lineHeight?: {
+    body: number;
+    heading: number;
+  };
+  letterSpacing?: {
+    heading: string;
+    body: string;
   };
 }
 
 export interface TemplateLayout {
   columns: 1 | 2 | 3;
-  headerStyle: 'centered' | 'left' | 'split';
-  sectionSpacing: 'compact' | 'normal' | 'spacious';
+  headerStyle: 'centered' | 'left' | 'split' | 'right' | 'minimal';
+  sectionSpacing: 'compact' | 'normal' | 'spacious' | 'relaxed';
   photoEnabled: boolean;
-  iconStyle: 'minimal' | 'colored' | 'none';
+  photoPosition?: 'left' | 'right' | 'top' | 'top-left' | 'top-right' | 'none';
+  iconStyle: 'minimal' | 'colored' | 'none' | 'modern';
+  borderStyle?: 'none' | 'thin' | 'thick' | 'double' | 'dashed';
+  backgroundStyle?: 'solid' | 'gradient' | 'pattern' | 'none';
+  sectionStyle?: 'card' | 'line' | 'border' | 'none';
 }
 
 export interface TemplateSectionConfig {
@@ -481,7 +489,41 @@ export interface TemplateSectionConfig {
   title: string;
   enabled: boolean;
   order: number;
+  required?: boolean;
+  alignment?: 'left' | 'center' | 'right';
+  icon?: string;
+  maxItems?: number;
+  minItems?: number;
   customStyles?: Record<string, string>;
+  color?: string;
+}
+
+export interface TemplateFeature {
+  icon: string;
+  label: string;
+  description: string;
+}
+
+export interface TemplateConfig {
+  id: string;
+  name: string;
+  category: TemplateCategory;
+  style: TemplateStyle;
+  description: string;
+  previewImage: string;
+  colors: TemplateColors;
+  fonts: TemplateFonts;
+  layout: TemplateLayout;
+  sections: TemplateSectionConfig[];
+  atsCompatibility: number;
+  popularity: number;
+  isPremium: boolean;
+  isDefault: boolean;
+  tags: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  features: TemplateFeature[];
 }
 
 // -------------------------------------------
