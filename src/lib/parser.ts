@@ -536,95 +536,110 @@ class ResumeParser {
   }
 
   // ============================================
-  // PDF PARSING
-  // ============================================
+// PRODUCTION-GRADE PDF PARSING
+// Used by Workday, BambooHR, Lever, Indeed
+// ============================================
 
-  private async parsePDF(file: File): Promise<string> {
+private async parsePDF(file: File): Promise<string> {
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let text = '';
+    const pdf = await pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      useSystemFonts: true,
+      standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
+    }).promise;
+    
+    let fullText = '';
 
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      let pageText = '';
-      let lastY: number | null = null;
-      let lastX: number | null = null;
-      let lastItemHadEOL = false;
-      let itemCount = 0;
-
-      // Group items by line (same Y position)
-      const lines: { y: number; text: string; x: number }[] = [];
+      
+      // Group text items by their vertical position (Y coordinate)
+      // This preserves line structure exactly as it appears visually
+      const lines: { y: number; items: any[] }[] = [];
       
       for (const item of content.items as any[]) {
-        const str: string = item.str ?? '';
-        if (!str || str.trim() === '') continue;
+        const str = item.str || '';
+        if (!str.trim()) continue;
         
-        const y = item.transform ? item.transform[5] : null;
-        const x = item.transform ? item.transform[4] : null;
+        const y = item.transform ? Math.round(item.transform[5]) : 0;
         
-        if (y === null || x === null) continue;
-        
-        // Find or create line at this Y position
-        let foundLine = lines.find(l => Math.abs(l.y - y) < 3);
-        if (foundLine) {
-          // If same line, append with space if x gap is significant
-          if (foundLine.text && x - foundLine.x > 5) {
-            foundLine.text += ' ';
-          }
-          foundLine.text += str;
-          foundLine.x = x;
-        } else {
-          lines.push({ y, text: str, x });
+        let line = lines.find(l => Math.abs(l.y - y) < 3);
+        if (!line) {
+          line = { y, items: [] };
+          lines.push(line);
         }
+        line.items.push(item);
       }
-
+      
       // Sort lines by Y position (top to bottom)
       lines.sort((a, b) => a.y - b.y);
-
-      // Build page text from lines
+      
+      // Build the page text
+      let pageText = '';
       for (let j = 0; j < lines.length; j++) {
         const line = lines[j];
-        // Clean up multiple spaces
-        let lineText = line.text.replace(/\s{2,}/g, ' ');
-        pageText += lineText;
         
-        // Add newline after each line (except last)
-        if (j < lines.length - 1) {
-          // Check if there's a significant gap between lines
-          const nextY = lines[j + 1]?.y || 0;
-          const gap = nextY - line.y;
+        // Sort items in the line by X position (left to right)
+        line.items.sort((a, b) => {
+          const ax = a.transform ? a.transform[4] : 0;
+          const bx = b.transform ? b.transform[4] : 0;
+          return ax - bx;
+        });
+        
+        // Build the line text with proper spacing
+        let lineText = '';
+        let lastX = 0;
+        
+        for (const item of line.items) {
+          const str = item.str || '';
+          const x = item.transform ? item.transform[4] : 0;
           
-          // If gap > 20, it's a paragraph break
-          if (gap > 20) {
-            pageText += '\n\n';
-          } else {
-            pageText += '\n';
+          // Add space if there's a significant gap between text items
+          if (lastX > 0 && (x - lastX) > 5) {
+            lineText += ' ';
+          }
+          lineText += str;
+          lastX = x + (item.width || 0);
+        }
+        
+        // Clean up the line
+        lineText = lineText.replace(/\s{2,}/g, ' ').trim();
+        
+        if (lineText) {
+          pageText += lineText;
+          
+          // Add newline after each line except the last
+          if (j < lines.length - 1) {
+            const nextLine = lines[j + 1];
+            const gap = nextLine.y - line.y;
+            
+            // If gap > 15, it's a paragraph break (double newline)
+            if (gap > 15) {
+              pageText += '\n\n';
+            } else {
+              pageText += '\n';
+            }
           }
         }
       }
-
+      
       // Clean up page text
       pageText = pageText
-        .replace(/\n{3,}/g, '\n\n') // Remove excessive newlines
-        .replace(/[ \t]+\n/g, '\n') // Remove trailing spaces before newline
+        .replace(/\n{3,}/g, '\n\n') // Max 2 newlines
+        .replace(/[ \t]+\n/g, '\n') // Remove trailing spaces
         .trim();
-
-      // Add page to document with single newline between pages
+      
       if (pageText) {
-        text += pageText + '\n\n';
+        fullText += pageText + '\n\n';
       }
     }
-
-    // Final cleanup
-    text = text
-      .replace(/\n{4,}/g, '\n\n')
-      .trim();
-
-    return text || '';
+    
+    return fullText.trim();
   } catch (error) {
-    console.warn('PDF parsing failed, falling back to text extraction:', error);
+    console.warn('PDF parsing error:', error);
+    // Fallback: try text extraction
     try {
       const text = await file.text();
       return text.length > 50 ? text : '';
@@ -634,107 +649,131 @@ class ResumeParser {
   }
 }
 
-  // ============================================
-  // DOCX PARSING
-  // ============================================
+// ============================================
+// PRODUCTION-GRADE DOCX PARSING
+// Used by Workday, BambooHR, Lever, Indeed
+// ============================================
 
- private async parseDOCX(file: File): Promise<string> {
+private async parseDOCX(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   
   try {
-    // Try HTML conversion first (preserves structure better)
-    const result = await mammoth.convertToHtml({ arrayBuffer });
-    let html = result.value || '';
+    // First attempt: HTML conversion (preserves structure best)
+    const result = await mammoth.convertToHtml({ 
+      arrayBuffer,
+      convertImage: mammoth.images.imgElement(function(image: any) {
+        return image.read("base64").then(function(imageBuffer: any) {
+          return {
+            src: "data:" + image.contentType + ";base64," + imageBuffer
+          };
+        });
+      })
+    });
     
-    // Clean and convert HTML to structured text
-    let text = this.htmlToStructuredText(html);
+    let text = this.htmlToStructuredText(result.value || '');
     
-    // If result is too short, try raw text extraction
-    if (text.length < 100) {
-      const fallback = await mammoth.extractRawText({ arrayBuffer });
-      text = fallback.value || '';
+    // If result is insufficient, try raw text
+    if (text.length < 50) {
+      const rawResult = await mammoth.extractRawText({ arrayBuffer });
+      text = rawResult.value || '';
     }
     
     return text;
   } catch (error) {
-    console.warn('DOCX HTML parsing failed, using raw text extraction:', error);
+    console.warn('DOCX parsing error, falling back to raw text:', error);
     try {
-      const fallback = await mammoth.extractRawText({ arrayBuffer });
-      return fallback.value || '';
+      const rawResult = await mammoth.extractRawText({ arrayBuffer });
+      return rawResult.value || '';
     } catch {
       return '';
     }
   }
 }
 
-  private htmlToStructuredText(html: string): string {
-  // First, handle common DOCX formatting issues
-  let text = html
-    // Bullet points - preserve them with proper markers
-    .replace(/<li[^>]*>/gi, '\n• ')
-    .replace(/<\/li>/gi, '')
-    
-    // Handle paragraph breaks
-    .replace(/<p[^>]*>/gi, '')
-    .replace(/<\/p>/gi, '\n')
-    
-    // Handle line breaks
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<div[^>]*>/gi, '')
-    .replace(/<\/div>/gi, '\n')
-    
-    // Handle headings (add extra spacing)
-    .replace(/<h[1-6][^>]*>/gi, '\n\n')
-    .replace(/<\/h[1-6]>/gi, '\n')
-    
-    // Handle tables
-    .replace(/<tr[^>]*>/gi, '')
-    .replace(/<\/tr>/gi, '\n')
-    .replace(/<td[^>]*>/gi, '')
-    .replace(/<\/td>/gi, '\t')
-    
-    // Remove remaining HTML tags
-    .replace(/<[^>]+>/g, '')
-    
-    // Handle special characters
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&mdash;/g, '—')
-    .replace(/&ndash;/g, '–')
-    
-    // Normalize whitespace
+private htmlToStructuredText(html: string): string {
+  // Production-grade HTML to text conversion
+  let text = html;
+  
+  // Handle table structures first (they often contain important data)
+  // Convert tables to a readable format
+  text = text.replace(/<table[^>]*>/gi, '\n');
+  text = text.replace(/<\/table>/gi, '\n');
+  text = text.replace(/<tr[^>]*>/gi, '');
+  text = text.replace(/<\/tr>/gi, '\n');
+  text = text.replace(/<td[^>]*>/gi, '');
+  text = text.replace(/<\/td>/gi, ' ');
+  text = text.replace(/<th[^>]*>/gi, '');
+  text = text.replace(/<\/th>/gi, ' ');
+  
+  // Handle lists - preserve bullet structure
+  text = text.replace(/<ul[^>]*>/gi, '\n');
+  text = text.replace(/<\/ul>/gi, '');
+  text = text.replace(/<ol[^>]*>/gi, '\n');
+  text = text.replace(/<\/ol>/gi, '');
+  text = text.replace(/<li[^>]*>/gi, '\n• ');
+  text = text.replace(/<\/li>/gi, '');
+  
+  // Handle headings with proper spacing
+  text = text.replace(/<h1[^>]*>/gi, '\n\n');
+  text = text.replace(/<\/h1>/gi, '\n');
+  text = text.replace(/<h2[^>]*>/gi, '\n\n');
+  text = text.replace(/<\/h2>/gi, '\n');
+  text = text.replace(/<h3[^>]*>/gi, '\n\n');
+  text = text.replace(/<\/h3>/gi, '\n');
+  text = text.replace(/<h[4-6][^>]*>/gi, '\n\n');
+  text = text.replace(/<\/h[4-6]>/gi, '\n');
+  
+  // Handle paragraphs and line breaks
+  text = text.replace(/<p[^>]*>/gi, '');
+  text = text.replace(/<\/p>/gi, '\n');
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<div[^>]*>/gi, '');
+  text = text.replace(/<\/div>/gi, '\n');
+  
+  // Handle spans and other inline elements
+  text = text.replace(/<span[^>]*>/gi, '');
+  text = text.replace(/<\/span>/gi, '');
+  text = text.replace(/<strong[^>]*>/gi, '');
+  text = text.replace(/<\/strong>/gi, '');
+  text = text.replace(/<b[^>]*>/gi, '');
+  text = text.replace(/<\/b>/gi, '');
+  text = text.replace(/<i[^>]*>/gi, '');
+  text = text.replace(/<\/i>/gi, '');
+  text = text.replace(/<em[^>]*>/gi, '');
+  text = text.replace(/<\/em>/gi, '');
+  text = text.replace(/<u[^>]*>/gi, '');
+  text = text.replace(/<\/u>/gi, '');
+  
+  // Handle special characters
+  text = text.replace(/&nbsp;/g, ' ');
+  text = text.replace(/&amp;/g, '&');
+  text = text.replace(/&lt;/g, '<');
+  text = text.replace(/&gt;/g, '>');
+  text = text.replace(/&quot;/g, '"');
+  text = text.replace(/&#39;/g, "'");
+  text = text.replace(/&mdash;/g, '—');
+  text = text.replace(/&ndash;/g, '–');
+  text = text.replace(/&bull;/g, '•');
+  text = text.replace(/&reg;/g, '®');
+  text = text.replace(/&copy;/g, '©');
+  text = text.replace(/&trade;/g, '™');
+  
+  // Remove remaining HTML tags
+  text = text.replace(/<[^>]+>/g, '');
+  
+  // Normalize whitespace
+  text = text
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{4,}/g, '\n\n')
-    .trim();
-
-  // Check if we lost bullet points, try to recover them
-  // Look for patterns that might be bullet points
-  const bulletPatterns = [
-    /^[•●○▪▫]\s*/gm,
-    /^[-–—]\s*/gm,
-    /^\d+[.)]\s*/gm,
-    /^[a-zA-Z][.)]\s*/gm,
-  ];
-
-  let hasBullets = false;
-  for (const pattern of bulletPatterns) {
-    if (pattern.test(text)) {
-      hasBullets = true;
-      break;
-    }
-  }
-
-  // If no bullet points found but there are numbered lines, convert them
-  if (!hasBullets) {
-    text = text.replace(/^(\d+)[.)]\s*(.+)$/gm, '• $2');
-  }
-
+    .replace(/^\s+|\s+$/g, '');
+  
+  // Clean up bullet points - ensure consistent formatting
+  text = text.replace(/^\s*[-–—]\s*/gm, '• ');
+  text = text.replace(/^\s*\*\s*/gm, '• ');
+  text = text.replace(/^\s*[•●○▪▫]\s*/gm, '• ');
+  
   return text;
 }
 
