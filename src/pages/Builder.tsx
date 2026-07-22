@@ -300,7 +300,7 @@ const Builder: React.FC = () => {
   toast('💡 Review suggested corrections below', { duration: 5000 }); // FIXED: Changed from toast.info to toast
   setShowMLSuggestions(true);
 } else {
-  toast.warning(`⚠️ Low confidence parse. Please review and correct.`);
+  toast.error(`⚠️ Low confidence parse. Please review and correct.`);
   toast('💡 Use AI suggestions to improve parsing', { duration: 5000 }); // FIXED: Changed from toast.info to toast
   setShowMLSuggestions(true);
 }
