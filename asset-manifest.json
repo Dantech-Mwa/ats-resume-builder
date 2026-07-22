@@ -1,0 +1,43 @@
+{
+  "files": {
+    "main.css": "/ats-resume-builder/static/css/main.c4b2a746.css",
+    "main.js": "/ats-resume-builder/static/js/main.6b169f47.js",
+    "static/js/954.823b4335.chunk.js": "/ats-resume-builder/static/js/954.823b4335.chunk.js",
+    "static/js/220.bd6bacfc.chunk.js": "/ats-resume-builder/static/js/220.bd6bacfc.chunk.js",
+    "static/js/448.8766bb68.chunk.js": "/ats-resume-builder/static/js/448.8766bb68.chunk.js",
+    "static/js/975.917dc1a1.chunk.js": "/ats-resume-builder/static/js/975.917dc1a1.chunk.js",
+    "static/js/844.87a78b82.chunk.js": "/ats-resume-builder/static/js/844.87a78b82.chunk.js",
+    "static/js/678.e14f7178.chunk.js": "/ats-resume-builder/static/js/678.e14f7178.chunk.js",
+    "static/js/239.023ba3d3.chunk.js": "/ats-resume-builder/static/js/239.023ba3d3.chunk.js",
+    "static/js/762.185ae52b.chunk.js": "/ats-resume-builder/static/js/762.185ae52b.chunk.js",
+    "static/js/213.ca944e03.chunk.js": "/ats-resume-builder/static/js/213.ca944e03.chunk.js",
+    "static/js/455.d655fb8f.chunk.js": "/ats-resume-builder/static/js/455.d655fb8f.chunk.js",
+    "static/js/243.37c5f9e0.chunk.js": "/ats-resume-builder/static/js/243.37c5f9e0.chunk.js",
+    "static/js/488.0694f994.chunk.js": "/ats-resume-builder/static/js/488.0694f994.chunk.js",
+    "static/js/769.425b6f68.chunk.js": "/ats-resume-builder/static/js/769.425b6f68.chunk.js",
+    "static/js/416.a070163d.chunk.js": "/ats-resume-builder/static/js/416.a070163d.chunk.js",
+    "static/js/85.44381d4e.chunk.js": "/ats-resume-builder/static/js/85.44381d4e.chunk.js",
+    "index.html": "/ats-resume-builder/index.html",
+    "main.c4b2a746.css.map": "/ats-resume-builder/static/css/main.c4b2a746.css.map",
+    "main.6b169f47.js.map": "/ats-resume-builder/static/js/main.6b169f47.js.map",
+    "954.823b4335.chunk.js.map": "/ats-resume-builder/static/js/954.823b4335.chunk.js.map",
+    "220.bd6bacfc.chunk.js.map": "/ats-resume-builder/static/js/220.bd6bacfc.chunk.js.map",
+    "448.8766bb68.chunk.js.map": "/ats-resume-builder/static/js/448.8766bb68.chunk.js.map",
+    "975.917dc1a1.chunk.js.map": "/ats-resume-builder/static/js/975.917dc1a1.chunk.js.map",
+    "844.87a78b82.chunk.js.map": "/ats-resume-builder/static/js/844.87a78b82.chunk.js.map",
+    "678.e14f7178.chunk.js.map": "/ats-resume-builder/static/js/678.e14f7178.chunk.js.map",
+    "239.023ba3d3.chunk.js.map": "/ats-resume-builder/static/js/239.023ba3d3.chunk.js.map",
+    "762.185ae52b.chunk.js.map": "/ats-resume-builder/static/js/762.185ae52b.chunk.js.map",
+    "213.ca944e03.chunk.js.map": "/ats-resume-builder/static/js/213.ca944e03.chunk.js.map",
+    "455.d655fb8f.chunk.js.map": "/ats-resume-builder/static/js/455.d655fb8f.chunk.js.map",
+    "243.37c5f9e0.chunk.js.map": "/ats-resume-builder/static/js/243.37c5f9e0.chunk.js.map",
+    "488.0694f994.chunk.js.map": "/ats-resume-builder/static/js/488.0694f994.chunk.js.map",
+    "769.425b6f68.chunk.js.map": "/ats-resume-builder/static/js/769.425b6f68.chunk.js.map",
+    "416.a070163d.chunk.js.map": "/ats-resume-builder/static/js/416.a070163d.chunk.js.map",
+    "85.44381d4e.chunk.js.map": "/ats-resume-builder/static/js/85.44381d4e.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.c4b2a746.css",
+    "static/js/main.6b169f47.js"
+  ]
+}

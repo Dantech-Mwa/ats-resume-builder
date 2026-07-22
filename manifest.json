@@ -1,0 +1,31 @@
+{
+  "short_name": "ATS Resume",
+  "name": "ATS Resume Builder - AI-Powered Resume Creation",
+  "description": "Create professional, ATS-friendly resumes with AI-powered optimization",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#2563EB",
+  "background_color": "#FFFFFF",
+  "orientation": "portrait-primary",
+  "scope": "/ats-resume-builder/",
+  "categories": ["business", "productivity", "education"]
+}
