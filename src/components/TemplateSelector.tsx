@@ -149,15 +149,72 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
 
       {/* Preview Image */}
       <div className="aspect-[3/4] bg-gray-100 overflow-hidden">
-        <img
-          src={template.previewImage}
-          alt={template.name}
-          className="w-full h-full object-cover object-top"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23f3f4f6" width="100" height="100"/><text x="50" y="50" text-anchor="middle" dy=".3em" fill="%239ca3af">Preview</text></svg>';
-          }}
-        />
+        {/* NEW - CSS-generated preview */}
+<div 
+  className="w-full h-full flex flex-col p-3"
+  style={{ 
+    backgroundColor: template.colors.background,
+    fontFamily: template.fonts.heading,
+  }}
+>
+  {/* Name */}
+  <div style={{ 
+    fontSize: template.fonts.sizes.name, 
+    color: template.colors.headingText,
+    fontWeight: 'bold',
+    textAlign: template.layout.headerStyle === 'centered' ? 'center' : 'left',
+    marginBottom: '4px',
+  }}>
+    John Doe
+  </div>
+  
+  {/* Contact line */}
+  <div style={{ 
+    fontSize: '6px', 
+    color: '#666', 
+    textAlign: template.layout.headerStyle === 'centered' ? 'center' : 'left',
+    marginBottom: '8px',
+    borderBottom: `1px solid ${template.colors.borderColor}`,
+    paddingBottom: '4px',
+  }}>
+    john@email.com | (555) 123-4567 | New York, NY
+  </div>
+  
+  {/* Summary */}
+  <div style={{ fontSize: '5px', color: template.colors.text, marginBottom: '6px', lineHeight: 1.3 }}>
+    Experienced professional with a proven track record of delivering results...
+  </div>
+  
+  {/* Experience */}
+  <div style={{ fontSize: template.fonts.sizes.headings, color: template.colors.primary, fontWeight: 'bold', marginBottom: '2px' }}>
+    EXPERIENCE
+  </div>
+  <div style={{ fontSize: '5px', color: template.colors.text, marginBottom: '2px' }}>
+    <strong>Software Engineer</strong> | Tech Corp
+  </div>
+  <div style={{ fontSize: '4px', color: '#999', marginBottom: '3px' }}>
+    2020 - Present
+  </div>
+  
+  {/* Education */}
+  <div style={{ fontSize: template.fonts.sizes.headings, color: template.colors.primary, fontWeight: 'bold', marginBottom: '2px' }}>
+    EDUCATION
+  </div>
+  <div style={{ fontSize: '5px', color: template.colors.text, marginBottom: '2px' }}>
+    B.Sc. Computer Science | MIT
+  </div>
+  <div style={{ fontSize: '4px', color: '#999', marginBottom: '6px' }}>
+    2016 - 2020
+  </div>
+  
+  {/* Skills */}
+  <div style={{ fontSize: template.fonts.sizes.headings, color: template.colors.primary, fontWeight: 'bold', marginBottom: '2px' }}>
+    SKILLS
+  </div>
+  <div style={{ fontSize: '4px', color: template.colors.text }}>
+    JavaScript • React • Node.js • Python • SQL • AWS • Docker • Git
+  </div>
+</div>
       </div>
 
       {/* Info */}
