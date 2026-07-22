@@ -1,7 +1,5 @@
-// src/lib/types.ts
 // ============================================
 // ATS RESUME BUILDER - COMPLETE TYPE SYSTEM
-// ENHANCED VERSION WITH ML & ADVANCED FEATURES
 // ============================================
 
 // -------------------------------------------
@@ -9,7 +7,7 @@
 // -------------------------------------------
 
 export type SubscriptionPlan = 'trial' | 'monthly' | 'yearly' | 'none';
-export type SubscriptionStatus = 'active' | 'expired' | 'cancelled' | 'pending' | 'grace_period';
+export type SubscriptionStatus = 'active' | 'expired' | 'cancelled' | 'pending';
 export type PaymentMethod = 'paypal' | 'stripe' | 'none';
 
 export interface Subscription {
@@ -22,19 +20,10 @@ export interface Subscription {
   currency: string;
   autoRenew: boolean;
   paymentId?: string;
-  trialUsed: boolean;
-  features: string[];
-  usageStats: SubscriptionUsage;
-}
-
-export interface SubscriptionUsage {
-  resumesGenerated: number;
-  resumesLimit: number;
-  aiAnalysesUsed: number;
-  aiAnalysesLimit: number;
-  exportsUsed: number;
-  exportsLimit: number;
-  lastReset: string;
+  // NEW: For ML parser learning
+  trialUsed?: boolean;
+  // NEW: For tracking features
+  features?: string[];
 }
 
 export interface User {
@@ -48,8 +37,6 @@ export interface User {
   updatedAt: string;
   lastLoginAt: string;
   preferences: UserPreferences;
-  settings: UserSettings;
-  analytics: UserAnalytics;
 }
 
 export interface UserPreferences {
@@ -58,34 +45,6 @@ export interface UserPreferences {
   defaultTemplate: string;
   emailNotifications: boolean;
   showAIAssistant: boolean;
-  autoSave: boolean;
-  compactMode: boolean;
-  accessibility: AccessibilityPreferences;
-}
-
-export interface AccessibilityPreferences {
-  highContrast: boolean;
-  reducedMotion: boolean;
-  fontSize: 'small' | 'medium' | 'large' | 'x-large';
-  screenReaderOptimized: boolean;
-}
-
-export interface UserSettings {
-  defaultExportFormat: 'pdf' | 'docx' | 'txt';
-  atsScoringEnabled: boolean;
-  aiSuggestionsEnabled: boolean;
-  autoAnalyzeOnImport: boolean;
-  shareAnalytics: boolean;
-  betaFeatures: boolean;
-}
-
-export interface UserAnalytics {
-  totalResumesCreated: number;
-  totalExports: number;
-  averageATSScore: number;
-  mostUsedTemplate: string;
-  lastActive: string;
-  featureUsage: Record<string, number>;
 }
 
 export interface AuthState {
@@ -93,13 +52,10 @@ export interface AuthState {
   loading: boolean;
   error: string | null;
   isAuthenticated: boolean;
-  sessionExpiry: string | null;
-  requiresTwoFactor: boolean;
-  provider: 'email' | 'google' | 'github' | 'linkedin';
 }
 
 // -------------------------------------------
-// RESUME TYPES - ENHANCED
+// RESUME TYPES - Enhanced for ML Parser
 // -------------------------------------------
 
 export interface ContactInfo {
@@ -112,23 +68,16 @@ export interface ContactInfo {
   portfolio?: string;
   github?: string;
   twitter?: string;
+  // NEW: For better contact parsing
   website?: string;
-  dateOfBirth?: string;
-  nationality?: string;
-  pronouns?: string;
-  workAuthorization?: 'US Citizen' | 'Green Card' | 'Work Visa' | 'No Sponsorship Needed' | 'Needs Sponsorship';
-  preferredContactMethod?: 'email' | 'phone' | 'linkedin';
-  timezone?: string;
 }
 
 export interface ProfessionalSummary {
   content: string;
   aiOptimized: boolean;
   lastModified: string;
-  versions: SummaryVersion[];
-  keywordDensity: Record<string, number>;
-  characterCount: number;
-  wordCount: number;
+  // NEW: For ML parser version tracking
+  versions?: SummaryVersion[];
 }
 
 export interface SummaryVersion {
@@ -136,7 +85,7 @@ export interface SummaryVersion {
   content: string;
   timestamp: string;
   source: 'user' | 'ai' | 'template';
-  atsScore: number | null;
+  atsScore?: number;
 }
 
 export interface WorkExperience {
@@ -151,29 +100,9 @@ export interface WorkExperience {
   achievements: string[];
   technologies: string[];
   aiSuggestions: string[];
+  // NEW: For ML parser enhancements
   industry?: string;
-  companyType?: 'Startup' | 'SME' | 'Large Enterprise' | 'Non-Profit' | 'Government' | 'Education';
   employmentType?: 'Full-time' | 'Part-time' | 'Contract' | 'Freelance' | 'Internship' | 'Volunteer';
-  durationYears: number;
-  skillsGained: string[];
-  promotions: PromotionHistory[];
-  projects: ExperienceProject[];
-}
-
-export interface PromotionHistory {
-  date: string;
-  fromPosition: string;
-  toPosition: string;
-  reason: string;
-}
-
-export interface ExperienceProject {
-  id: string;
-  name: string;
-  description: string;
-  technologies: string[];
-  achievements: string[];
-  link?: string;
 }
 
 export interface Education {
@@ -187,13 +116,9 @@ export interface Education {
   honors: string[];
   activities: string[];
   relevantCourses: string[];
-  location: string;
-  degreeType: 'Associate' | 'Bachelor' | 'Master' | 'PhD' | 'Certificate' | 'Diploma' | 'High School' | 'Other';
-  cgpa?: number;
-  achievements: string[];
-  researchTopics: string[];
-  thesisTitle?: string;
-  advisor?: string;
+  // NEW: For ML parser enhancements
+  location?: string;
+  degreeType?: 'Associate' | 'Bachelor' | 'Master' | 'PhD' | 'Certificate' | 'Diploma' | 'High School' | 'Other';
 }
 
 export interface Skill {
@@ -201,10 +126,8 @@ export interface Skill {
   level: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert' | 'Master';
   category: string;
   yearsOfExperience?: number;
+  // NEW: For ML parser
   lastUsed?: string;
-  endorsements?: number;
-  projectsUsedIn?: string[];
-  selfRated: 1 | 2 | 3 | 4 | 5;
 }
 
 export interface SkillsSection {
@@ -213,9 +136,10 @@ export interface SkillsSection {
   languages: Skill[];
   tools: Skill[];
   other: Skill[];
-  frameworks: Skill[];
-  databases: Skill[];
-  cloudPlatforms: Skill[];
+  // NEW: For ML parser categorization
+  frameworks?: Skill[];
+  databases?: Skill[];
+  cloudPlatforms?: Skill[];
 }
 
 export interface Certification {
@@ -227,9 +151,8 @@ export interface Certification {
   credentialId?: string;
   credentialUrl?: string;
   inProgress: boolean;
-  skillsValidated: string[];
-  annualRenewal: boolean;
-  isActive: boolean;
+  // NEW: For ML parser
+  skillsValidated?: string[];
 }
 
 export interface Project {
@@ -244,28 +167,19 @@ export interface Project {
   current: boolean;
   achievements: string[];
   role: string;
+  // NEW: For ML parser
   teamSize?: number;
-  problemSolved: string;
-  impactMetrics: ImpactMetric[];
-  featured: boolean;
-}
-
-export interface ImpactMetric {
-  name: string;
-  value: string;
-  description: string;
-  unit: string;
-  comparison?: string;
 }
 
 export interface Language {
   name: string;
   proficiency: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
   certification?: string;
-  readingLevel: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
-  writingLevel: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
-  speakingLevel: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
-  listeningLevel: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
+  // NEW: For detailed language parsing
+  readingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
+  writingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
+  speakingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
+  listeningLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
 }
 
 export interface Volunteer {
@@ -277,8 +191,8 @@ export interface Volunteer {
   current: boolean;
   description: string;
   achievements: string[];
-  cause: string[];
-  hoursPerWeek: number;
+  // NEW: For ML parser
+  cause?: string[];
 }
 
 export interface Publication {
@@ -290,12 +204,9 @@ export interface Publication {
   doi?: string;
   description: string;
   coAuthors: string[];
-  journalName: string;
-  volume: string;
-  pages: string;
-  citations: number;
-  impactFactor: number;
-  peerReviewed: boolean;
+  // NEW: For ML parser
+  journalName?: string;
+  peerReviewed?: boolean;
 }
 
 export interface Award {
@@ -305,8 +216,8 @@ export interface Award {
   date: string;
   description: string;
   category: string;
-  monetaryValue?: number;
-  level: 'Local' | 'Regional' | 'National' | 'International' | 'Global';
+  // NEW: For ML parser
+  level?: 'Local' | 'Regional' | 'National' | 'International' | 'Global';
 }
 
 export interface CustomSection {
@@ -322,8 +233,8 @@ export interface CustomSectionItem {
   date: string;
   description: string;
   bulletPoints: string[];
-  link?: string;
-  tags: string[];
+  // NEW: For ML parser
+  tags?: string[];
 }
 
 export interface ResumeSections {
@@ -339,12 +250,14 @@ export interface ResumeSections {
   publications: Publication[];
   awards: Award[];
   customSections: CustomSection[];
-  professionalAffiliations: ProfessionalAffiliation[];
-  conferences: Conference[];
-  patents: Patent[];
-  references: Reference[];
+  // NEW: For ML parser additional sections
+  professionalAffiliations?: ProfessionalAffiliation[];
+  conferences?: Conference[];
+  patents?: Patent[];
+  references?: Reference[];
 }
 
+// NEW: Types for additional sections (optional)
 export interface ProfessionalAffiliation {
   id: string;
   name: string;
@@ -400,22 +313,11 @@ export interface ResumeMetadata {
   targetRole?: string;
   targetIndustry?: string;
   completeness: number;
-  atsScore: number | null;
-  aiOptimized: boolean;
-  lastAnalyzedAt: string | null;
-  versionHistory: ResumeVersion[];
-  keywords: string[];
-  readabilityScore: number;
-  actionVerbCount: number;
-}
-
-export interface ResumeVersion {
-  id: string;
-  timestamp: string;
-  version: number;
-  changes: string[];
-  atsScore: number | null;
-  createdBy: 'user' | 'ai' | 'template' | 'import';
+  // NEW: For ML parser tracking
+  parsedWith?: 'ml' | 'rule' | 'hybrid';
+  parsedConfidence?: number;
+  templateType?: string;
+  requiresReview?: boolean;
 }
 
 export interface ResumeData {
@@ -423,12 +325,10 @@ export interface ResumeData {
   sections: ResumeSections;
   atsScore: ATSScore | null;
   aiRecommendations: AIRecommendation[];
-  jobMatches: JobMatchResult[];
-  analytics: ResumeAnalytics;
 }
 
 // -------------------------------------------
-// ATS SCORING TYPES - ENHANCED
+// ATS SCORING TYPES - Enhanced for better scoring
 // -------------------------------------------
 
 export interface ATSBreakdown {
@@ -442,17 +342,10 @@ export interface ATSBreakdown {
   contactInfoQuality: number;
   skillsRelevance: number;
   overallReadability: number;
-  industrySpecificKeywords: number;
-  roleSpecificKeywords: number;
-  seniorityMatch: number;
-  experienceRelevance: number;
-  educationRelevance: number;
-  certificationRelevance: number;
-  languageProficiency: number;
-  tenseConsistency: number;
-  metricsDensity: number;
-  achievementsQuality: number;
-  personalizationScore: number;
+  // NEW: For ML-enhanced scoring
+  industrySpecificKeywords?: number;
+  roleSpecificKeywords?: number;
+  seniorityMatch?: number;
 }
 
 export interface ATSScore {
@@ -463,17 +356,14 @@ export interface ATSScore {
   criticalIssues: string[];
   analyzedAt: string;
   jobDescriptionMatch?: number;
-  employerPreferenceMatch?: number;
-  industryMatch?: number;
-  roleMatch?: number;
-  keywordDensity: Record<string, number>;
-  suggestedKeywords: string[];
-  atsParsingReadability: number;
-  fontCompatibility: number;
+  // NEW: For ML-enhanced scoring
+  keywordDensity?: Record<string, number>;
+  suggestedKeywords?: string[];
+  atsParsingReadability?: number;
 }
 
 // -------------------------------------------
-// ML & AI TYPES - ENHANCED
+// AI TYPES - Enhanced for ML parser
 // -------------------------------------------
 
 export interface AIRecommendation {
@@ -483,13 +373,13 @@ export interface AIRecommendation {
   current: string;
   suggested: string;
   reason: string;
-  priority: 'Critical' | 'High' | 'Medium' | 'Low' | 'Optional';
-  type: 'improvement' | 'addition' | 'removal' | 'rewrite' | 'optimization';
+  priority: 'Critical' | 'High' | 'Medium' | 'Low';
+  type: 'improvement' | 'addition' | 'removal' | 'rewrite';
   applied: boolean;
   createdAt: string;
-  category: string;
-  impactScore: number;
-  implementationEffort: 'Easy' | 'Medium' | 'Hard';
+  // NEW: For ML parser suggestions
+  confidence?: number;
+  category?: string;
 }
 
 export interface AIAnalysis {
@@ -497,45 +387,32 @@ export interface AIAnalysis {
   recommendations: AIRecommendation[];
   enhancedContent: Partial<ResumeSections>;
   keywords: string[];
-  suggestedKeywords: string[];
-  semanticKeywords: string[];
-  competitorInsights: CompetitorInsight[];
-}
-
-export interface CompetitorInsight {
-  industry: string;
-  role: string;
-  commonKeywords: string[];
-  missingKeywords: string[];
-  averageATSScore: number;
-  topPerformerKeywords: string[];
+  // NEW: For ML parser
+  suggestedKeywords?: string[];
+  semanticKeywords?: string[];
 }
 
 export interface AIChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'system' | 'tool';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
   suggestions?: string[];
+  // NEW: For ML parser context
   context?: Record<string, any>;
-  actions?: AIAction[];
 }
 
-export interface AIAction {
-  type: 'apply' | 'modify' | 'explain' | 'expand' | 'condense';
-  label: string;
-  handler: string;
-  data: Record<string, any>;
+// NEW: For ML parser suggestions
+export interface ParsingSuggestion {
+  field: string;
+  value: any;
+  confidence: number;
+  alternativeValues?: any[];
+  reason?: string;
+  action?: 'review' | 'auto-correct' | 'ignore';
 }
 
-export interface MLLearningData {
-  trainingExamples: TrainingExample[];
-  modelVersion: string;
-  lastTraining: string;
-  accuracy: number;
-  featureImportance: Record<string, number>;
-}
-
+// NEW: For ML training data
 export interface TrainingExample {
   id: string;
   rawText: string;
@@ -544,22 +421,19 @@ export interface TrainingExample {
   confidence: number;
   corrections: Partial<ResumeSections>;
   timestamp: string;
-  source: 'user' | 'auto' | 'import' | 'synthetic';
-  validationStatus: 'pending' | 'valid' | 'invalid' | 'needs_review';
+  source?: 'user' | 'auto' | 'import' | 'synthetic';
 }
 
 // -------------------------------------------
-// TEMPLATE TYPES - ENHANCED
+// TEMPLATE TYPES
 // -------------------------------------------
 
-export type TemplateCategory = 'professional' | 'creative' | 'academic' | 'executive' | 'modern' | 'simple' | 'technical';
-export type TemplateStyle = 'minimal' | 'elegant' | 'bold' | 'classic' | 'contemporary' | 'structured';
+export type TemplateCategory = 'professional' | 'creative' | 'academic' | 'executive' | 'modern';
 
 export interface TemplateConfig {
   id: string;
   name: string;
   category: TemplateCategory;
-  style: TemplateStyle;
   description: string;
   previewImage: string;
   colors: TemplateColors;
@@ -569,18 +443,6 @@ export interface TemplateConfig {
   atsCompatibility: number;
   popularity: number;
   isPremium: boolean;
-  isDefault: boolean;
-  tags: string[];
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  features: TemplateFeature[];
-}
-
-export interface TemplateFeature {
-  icon: string;
-  label: string;
-  description: string;
 }
 
 export interface TemplateColors {
@@ -591,13 +453,6 @@ export interface TemplateColors {
   background: string;
   headingText: string;
   borderColor: string;
-  linkColor: string;
-  bulletColor: string;
-  dividerColor: string;
-  highlightColor: string;
-  successColor: string;
-  errorColor: string;
-  warningColor: string;
 }
 
 export interface TemplateFonts {
@@ -609,29 +464,15 @@ export interface TemplateFonts {
     headings: string;
     body: string;
     small: string;
-    xSmall: string;
-    large: string;
-  };
-  lineHeight: {
-    body: number;
-    heading: number;
-  };
-  letterSpacing: {
-    heading: string;
-    body: string;
   };
 }
 
 export interface TemplateLayout {
   columns: 1 | 2 | 3;
-  headerStyle: 'centered' | 'left' | 'split' | 'right' | 'minimal';
-  sectionSpacing: 'compact' | 'normal' | 'spacious' | 'relaxed';
+  headerStyle: 'centered' | 'left' | 'split';
+  sectionSpacing: 'compact' | 'normal' | 'spacious';
   photoEnabled: boolean;
-  photoPosition: 'left' | 'right' | 'top' | 'top-left' | 'top-right' | 'none';
-  iconStyle: 'minimal' | 'colored' | 'none' | 'modern';
-  borderStyle: 'none' | 'thin' | 'thick' | 'double' | 'dashed';
-  backgroundStyle: 'solid' | 'gradient' | 'pattern' | 'none';
-  sectionStyle: 'card' | 'line' | 'border' | 'none';
+  iconStyle: 'minimal' | 'colored' | 'none';
 }
 
 export interface TemplateSectionConfig {
@@ -640,16 +481,10 @@ export interface TemplateSectionConfig {
   enabled: boolean;
   order: number;
   customStyles?: Record<string, string>;
-  maxItems?: number;
-  minItems?: number;
-  required: boolean;
-  icon?: string;
-  alignment: 'left' | 'center' | 'right';
-  color?: string;
 }
 
 // -------------------------------------------
-// PAYMENT TYPES
+// PAYMENT TYPES - Original (no changes)
 // -------------------------------------------
 
 export interface PricingPlan {
@@ -670,20 +505,10 @@ export interface PaymentDetails {
   amount: number;
   currency: string;
   method: PaymentMethod;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'chargeback';
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
   transactionId: string;
   createdAt: string;
   completedAt?: string;
-  receiptUrl?: string;
-}
-
-export interface BillingAddress {
-  line1: string;
-  line2?: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
 }
 
 export interface Invoice {
@@ -693,31 +518,16 @@ export interface Invoice {
   planName: string;
   period: string;
   downloadUrl?: string;
-  invoiceNumber: string;
-  issuedDate: string;
-  dueDate: string;
-  items: InvoiceItem[];
-  subtotal: number;
-  tax: number;
-  total: number;
-}
-
-export interface InvoiceItem {
-  id: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
 }
 
 // -------------------------------------------
-// UI STATE TYPES - ENHANCED
+// UI STATE TYPES - Original (no changes)
 // -------------------------------------------
 
 export interface UIState {
   sidebarOpen: boolean;
   modalOpen: string | null;
-  theme: 'light' | 'dark' | 'system';
+  theme: 'light' | 'dark';
   language: string;
   notifications: Notification[];
   toasts: Toast[];
@@ -726,24 +536,12 @@ export interface UIState {
     ai: boolean;
     upload: boolean;
     export: boolean;
-    save: boolean;
-    delete: boolean;
-    analyze: boolean;
   };
-  activeTab: string;
-  selectedSection: string;
-  displayMode: 'edit' | 'preview' | 'split';
-  zoomLevel: number;
-  viewportWidth: number;
-  viewportHeight: number;
-  isMobile: boolean;
-  isTablet: boolean;
-  isDesktop: boolean;
 }
 
 export interface Notification {
   id: string;
-  type: 'success' | 'error' | 'warning' | 'info' | 'achievement';
+  type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message: string;
   read: boolean;
@@ -752,8 +550,6 @@ export interface Notification {
     label: string;
     url: string;
   };
-  dismissible: boolean;
-  duration: number;
 }
 
 export interface Toast {
@@ -761,15 +557,10 @@ export interface Toast {
   type: 'success' | 'error' | 'warning' | 'info' | 'loading';
   message: string;
   duration?: number;
-  onDismiss?: () => void;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
 }
 
 // -------------------------------------------
-// API TYPES - ENHANCED
+// API TYPES - Enhanced for ML parser results
 // -------------------------------------------
 
 export interface APIResponse<T = any> {
@@ -778,16 +569,6 @@ export interface APIResponse<T = any> {
   error?: string;
   message?: string;
   timestamp: string;
-  statusCode: number;
-  requestId: string;
-  metadata?: Record<string, any>;
-  links?: {
-    self: string;
-    next?: string;
-    prev?: string;
-    first?: string;
-    last?: string;
-  };
 }
 
 export interface PaginatedResponse<T> extends APIResponse<T[]> {
@@ -795,24 +576,14 @@ export interface PaginatedResponse<T> extends APIResponse<T[]> {
   limit: number;
   total: number;
   hasMore: boolean;
-  sort: string;
-  order: 'asc' | 'desc';
-  pageCount: number;
 }
 
 export interface ResumeExportOptions {
-  format: 'pdf' | 'docx' | 'txt' | 'html' | 'json';
+  format: 'pdf' | 'docx' | 'txt';
   template: string;
   includeAIRecommendations: boolean;
   includeATSScore: boolean;
   sections: string[];
-  pageSize: 'A4' | 'Letter';
-  margins: 'normal' | 'narrow' | 'wide';
-  orientation: 'portrait' | 'landscape';
-  fileName: string;
-  includeMetadata: boolean;
-  minify: boolean;
-  prettyPrint: boolean;
 }
 
 export interface ResumeImportResult {
@@ -821,23 +592,15 @@ export interface ResumeImportResult {
   errors: string[];
   warnings: string[];
   rawText: string;
-  confidence: number;
-  suggestions: ParsingSuggestion[];
-  templateType: string;
-  requiresReview: boolean;
-}
-
-export interface ParsingSuggestion {
-  field: string;
-  value: any;
-  confidence: number;
-  alternativeValues?: any[];
-  reason: string;
-  action: 'review' | 'auto-correct' | 'ignore';
+  // NEW: For ML parser results
+  confidence?: number;
+  suggestions?: ParsingSuggestion[];
+  templateType?: string;
+  requiresReview?: boolean;
 }
 
 // -------------------------------------------
-// JOB MATCHING TYPES - ENHANCED
+// JOB MATCHING TYPES - Original (no changes)
 // -------------------------------------------
 
 export interface JobDescription {
@@ -849,16 +612,6 @@ export interface JobDescription {
   keywords: string[];
   industry: string;
   location: string;
-  postedDate: string;
-  employmentType: string;
-  salary: string;
-  benefits: string[];
-  responsibilities: string[];
-  requiredSkills: string[];
-  preferredSkills: string[];
-  yearsExperience: number;
-  educationLevel: string;
-  certifications: string[];
 }
 
 export interface JobMatchResult {
@@ -866,24 +619,12 @@ export interface JobMatchResult {
   keywordMatch: number;
   skillsMatch: number;
   experienceMatch: number;
-  educationMatch: number;
   missingKeywords: string[];
   recommendations: AIRecommendation[];
-  matchingKeywords: string[];
-  partialMatches: string[];
-  skillGap: SkillGap[];
-}
-
-export interface SkillGap {
-  skill: string;
-  importance: 'Critical' | 'High' | 'Medium' | 'Low';
-  type: 'hard' | 'soft';
-  suggestion: string;
-  learningResource?: string;
 }
 
 // -------------------------------------------
-// ANALYTICS TYPES - ENHANCED
+// ANALYTICS TYPES - Original (no changes)
 // -------------------------------------------
 
 export interface AnalyticsEvent {
@@ -896,89 +637,41 @@ export interface AnalyticsEvent {
   value?: number;
   metadata?: Record<string, any>;
   timestamp: string;
-  sessionId: string;
-  platform: string;
-  browser: string;
-  os: string;
-  device: string;
-  ip: string;
-  geolocation?: {
-    country: string;
-    region: string;
-    city: string;
-  };
 }
 
 export interface ResumeAnalytics {
   views: number;
   downloads: number;
   shares: number;
-  atsScoreHistory: { date: string; score: number; category: string }[];
+  atsScoreHistory: { date: string; score: number }[];
   improvementRate: number;
-  engagementTime: number;
-  sectionsViewed: Record<string, number>;
-  aiUsage: {
-    recommendationsAccepted: number;
-    recommendationsRejected: number;
-    chatMessages: number;
-    analyses: number;
-  };
-  exports: {
-    pdf: number;
-    docx: number;
-    txt: number;
-  };
-  userJourney: UserJourneyEvent[];
-}
-
-export interface UserJourneyEvent {
-  timestamp: string;
-  event: string;
-  duration: number;
-  path: string;
-  metadata: Record<string, any>;
 }
 
 // -------------------------------------------
-// EXPORT & IMPORT TYPES
+// EXPORT & IMPORT TYPES - Enhanced for ML parser
 // -------------------------------------------
 
-export type ExportFormat = 'pdf' | 'docx' | 'txt' | 'json' | 'html' | 'xml';
-export type ImportFormat = 'pdf' | 'docx' | 'txt' | 'linkedin' | 'json' | 'xml';
+export type ExportFormat = 'pdf' | 'docx' | 'txt' | 'json';
+export type ImportFormat = 'pdf' | 'docx' | 'txt' | 'linkedin';
 
 export interface ExportConfig {
   format: ExportFormat;
   templateId: string;
   includeAISuggestions: boolean;
   includeATSScore: boolean;
-  pageSize: 'A4' | 'Letter' | 'Legal';
-  margins: 'normal' | 'narrow' | 'wide' | 'custom';
-  customMargins?: {
-    top: number;
-    right: number;
-    bottom: number;
-    left: number;
-  };
-  fontSize: 'small' | 'normal' | 'large' | 'custom';
-  customFontSize?: number;
-  orientation: 'portrait' | 'landscape';
-  compression: 'none' | 'low' | 'medium' | 'high';
-  optimizeForATS: boolean;
-  includeCoverLetter: boolean;
-  includeReferences: boolean;
-  watermark?: string;
-  password?: string;
+  pageSize: 'A4' | 'Letter';
+  margins: 'normal' | 'narrow' | 'wide';
+  fontSize: 'small' | 'normal' | 'large';
 }
 
 // -------------------------------------------
-// FORM TYPES - ENHANCED
+// FORM TYPES - Original (no changes)
 // -------------------------------------------
 
 export interface LoginFormData {
   email: string;
   password: string;
   rememberMe: boolean;
-  twoFactorCode?: string;
 }
 
 export interface RegisterFormData {
@@ -987,22 +680,10 @@ export interface RegisterFormData {
   password: string;
   confirmPassword: string;
   acceptTerms: boolean;
-  acceptMarketing: boolean;
-  referralCode?: string;
-}
-
-export interface ForgotPasswordFormData {
-  email: string;
-}
-
-export interface ResetPasswordFormData {
-  password: string;
-  confirmPassword: string;
-  token: string;
 }
 
 export interface FormErrors {
-  [key: string]: string | string[];
+  [key: string]: string;
 }
 
 export interface FormState<T> {
@@ -1011,144 +692,4 @@ export interface FormState<T> {
   touched: Record<string, boolean>;
   isSubmitting: boolean;
   isValid: boolean;
-  isValidating: boolean;
-  submitCount: number;
 }
-
-// -------------------------------------------
-// UNDO/REDO TYPES
-// -------------------------------------------
-
-export interface UndoRedoState<T> {
-  history: T[];
-  currentIndex: number;
-  maxHistory: number;
-}
-
-export interface Action {
-  type: string;
-  payload: any;
-  timestamp: string;
-}
-
-export interface ActionHistory {
-  past: Action[];
-  present: Action;
-  future: Action[];
-}
-
-// -------------------------------------------
-// ERROR HANDLING TYPES
-// -------------------------------------------
-
-export interface AppError {
-  code: string;
-  message: string;
-  details?: Record<string, any>;
-  severity: 'info' | 'warning' | 'error' | 'critical';
-  timestamp: string;
-  stack?: string;
-  handled: boolean;
-  component?: string;
-  userAction?: string;
-}
-
-// -------------------------------------------
-// VALIDATION TYPES
-// -------------------------------------------
-
-export interface ValidationRule {
-  id: string;
-  field: string;
-  validator: (value: any) => boolean;
-  message: string;
-  severity: 'error' | 'warning' | 'info';
-}
-
-export interface ValidationResult {
-  valid: boolean;
-  errors: ValidationError[];
-  warnings: ValidationWarning[];
-}
-
-export interface ValidationError {
-  field: string;
-  message: string;
-  code: string;
-  value: any;
-}
-
-export interface ValidationWarning {
-  field: string;
-  message: string;
-  code: string;
-  value: any;
-  suggestion: string;
-}
-
-// -------------------------------------------
-// CACHE TYPES
-// -------------------------------------------
-
-export interface CacheEntry<T> {
-  data: T;
-  timestamp: number;
-  expiresAt: number;
-  version: number;
-  etag?: string;
-}
-
-export interface CacheConfig {
-  ttl: number;
-  maxSize: number;
-  strategy: 'lru' | 'lfu' | 'fifo';
-}
-
-// -------------------------------------------
-// PERFORMANCE TYPES
-// -------------------------------------------
-
-export interface PerformanceMetric {
-  name: string;
-  value: number;
-  unit: 'ms' | 'kb' | 'bytes' | 'count' | 'percent';
-  timestamp: string;
-  tags: Record<string, string>;
-}
-
-export interface PerformanceReport {
-  id: string;
-  metrics: PerformanceMetric[];
-  timestamp: string;
-  environment: {
-    browser: string;
-    os: string;
-    device: string;
-    connection: string;
-  };
-  thresholds: Record<string, number>;
-}
-
-// ============================================
-// EXPORT ALL TYPES - Keep as is
-// ============================================
-
-// Note: These exports assume you have separate files or you can remove them
-// if all types are defined in this single file
-export * from './auth';
-export * from './resume';
-export * from './ats';
-export * from './ai';
-export * from './templates';
-export * from './payment';
-export * from './ui';
-export * from './api';
-export * from './job';
-export * from './analytics';
-export * from './export';
-export * from './form';
-export * from './undo-redo';
-export * from './errors';
-export * from './validation';
-export * from './cache';
-export * from './performance';
