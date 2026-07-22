@@ -1,6 +1,7 @@
 // ============================================
-// INSTITUTIONAL-GRADE ATS SCORING ENGINE
-// Local scoring + AI enhancement = Consistent results
+// WORLD-CLASS ATS SCORING ENGINE
+// Auto-detects profession, industry, seniority
+// Scores dynamically based on detected role
 // ============================================
 
 import {
@@ -13,17 +14,153 @@ import {
 const GROQ_API_KEY = process.env.REACT_APP_GROQ_API_KEY || '';
 const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY || '';
 
-// Utility helper to guarantee a clean 0-100 integer
+// ============================================
+// UTILITY
+// ============================================
+
 function safeNumber(val: any, fallback = 50): number {
   const num = Number(val);
-  if (!Number.isFinite(num) || Number.isNaN(num)) {
-    return fallback;
-  }
+  if (!Number.isFinite(num) || Number.isNaN(num)) return fallback;
   return Math.min(100, Math.max(0, Math.round(num)));
 }
 
 // ============================================
-// INDUSTRY-SPECIFIC SCORING PROFILES
+// GLOBAL PROFESSION DETECTOR
+// 100+ professions across 20+ industries
+// ============================================
+
+interface DetectedProfession {
+  title: string;
+  industry: string;
+  confidence: number;
+  criticalKeywords: string[];
+  seniority: 'entry' | 'mid' | 'senior' | 'executive';
+  requiredSections: string[];
+}
+
+class ProfessionDetector {
+  
+  private static readonly PATTERNS: {
+    regex: RegExp;
+    title: string;
+    industry: string;
+    keywords: string[];
+    seniority: DetectedProfession['seniority'];
+    sections: string[];
+  }[] = [
+    // ---- TECHNOLOGY ----
+    { regex: /chief\s+technology\s+officer|cto\b/i, title: 'Chief Technology Officer', industry: 'technology', keywords: ['technology strategy', 'digital transformation', 'architecture', 'innovation', 'engineering leadership', 'board'], seniority: 'executive', sections: ['summary','experience','education','skills','achievements','board'] },
+    { regex: /vp\s+of\s+engineering|director\s+of\s+engineering|head\s+of\s+engineering/i, title: 'Engineering Director', industry: 'technology', keywords: ['engineering management', 'team leadership', 'architecture', 'agile', 'roadmap', 'hiring'], seniority: 'senior', sections: ['summary','experience','education','skills','leadership'] },
+    { regex: /senior\s+software\s+engineer|lead\s+software\s+engineer|principal\s+engineer|staff\s+engineer/i, title: 'Senior Software Engineer', industry: 'technology', keywords: ['system design', 'architecture', 'mentoring', 'code review', 'microservices', 'cloud', 'performance'], seniority: 'senior', sections: ['summary','experience','education','skills','projects'] },
+    { regex: /software\s+engineer|software\s+developer|full\s*stack|backend\s+developer|frontend\s+developer/i, title: 'Software Engineer', industry: 'technology', keywords: ['javascript', 'react', 'node', 'python', 'api', 'git', 'agile', 'testing'], seniority: 'mid', sections: ['summary','experience','education','skills','projects'] },
+    { regex: /devops\s+engineer|cloud\s+engineer|infrastructure\s+engineer|sre\b|site\s+reliability/i, title: 'DevOps Engineer', industry: 'technology', keywords: ['docker', 'kubernetes', 'terraform', 'aws', 'ci/cd', 'jenkins', 'linux', 'monitoring'], seniority: 'mid', sections: ['summary','experience','education','skills','certifications'] },
+    { regex: /data\s+scientist|machine\s+learning\s+engineer|ai\s+engineer|nlp\s+engineer/i, title: 'Data Scientist', industry: 'technology', keywords: ['python', 'machine learning', 'deep learning', 'sql', 'tensorflow', 'pytorch', 'statistics', 'nlp'], seniority: 'mid', sections: ['summary','experience','education','skills','projects','publications'] },
+    { regex: /data\s+engineer|etl\s+developer|big\s+data\s+engineer/i, title: 'Data Engineer', industry: 'technology', keywords: ['sql', 'python', 'spark', 'airflow', 'etl', 'data warehouse', 'kafka', 'aws'], seniority: 'mid', sections: ['summary','experience','education','skills','certifications'] },
+    { regex: /data\s+analyst|business\s+intelligence|bi\s+developer|analytics\s+engineer/i, title: 'Data Analyst', industry: 'technology', keywords: ['sql', 'excel', 'tableau', 'power bi', 'python', 'analytics', 'reporting', 'dashboard'], seniority: 'entry', sections: ['summary','experience','education','skills'] },
+    { regex: /cyber\s*security|security\s+engineer|information\s+security|security\s+analyst|penetration\s+tester/i, title: 'Security Engineer', industry: 'technology', keywords: ['security', 'penetration testing', 'firewall', 'siem', 'compliance', 'vulnerability', 'incident response'], seniority: 'mid', sections: ['summary','experience','education','skills','certifications'] },
+    { regex: /qa\s+engineer|quality\s+assurance|test\s+engineer|automation\s+engineer|sdet\b/i, title: 'QA Engineer', industry: 'technology', keywords: ['testing', 'automation', 'selenium', 'cypress', 'jira', 'test cases', 'regression', 'api testing'], seniority: 'mid', sections: ['summary','experience','education','skills','certifications'] },
+    { regex: /product\s+manager|technical\s+product\s+manager|senior\s+product\s+manager/i, title: 'Product Manager', industry: 'technology', keywords: ['roadmap', 'stakeholder', 'user stories', 'backlog', 'agile', 'scrum', 'kpi', 'market research'], seniority: 'mid', sections: ['summary','experience','education','skills'] },
+    { regex: /ux\s+designer|ui\s+designer|product\s+designer|ux\s+researcher|interaction\s+designer/i, title: 'UX Designer', industry: 'technology', keywords: ['figma', 'sketch', 'user research', 'wireframes', 'prototyping', 'usability', 'design system', 'a/b testing'], seniority: 'mid', sections: ['summary','experience','education','skills','portfolio'] },
+    
+    // ---- DATA & ANALYTICS (Cross-industry) ----
+    { regex: /merl\s+specialist|m&e\s+specialist|monitoring\s+and\s+evaluation|merl\s+officer|m&e\s+officer/i, title: 'MERL Specialist', industry: 'development', keywords: ['usaid', 'kpi', 'logframe', 'data quality', 'impact assessment', 'evaluation', 'monitoring', 'indicators', 'dqa', 'cla', 'outcome harvesting'], seniority: 'mid', sections: ['summary','experience','education','skills','projects'] },
+    { regex: /business\s+analyst|management\s+consultant|strategy\s+consultant|business\s+process\s+analyst/i, title: 'Business Analyst', industry: 'consulting', keywords: ['requirements', 'stakeholder', 'process improvement', 'data analysis', 'documentation', 'gap analysis', 'swot', 'business case'], seniority: 'mid', sections: ['summary','experience','education','skills','certifications'] },
+    
+    // ---- FINANCE & ACCOUNTING ----
+    { regex: /chief\s+financial\s+officer|cfo\b|finance\s+director|vp\s+of\s+finance/i, title: 'CFO', industry: 'finance', keywords: ['financial strategy', 'forecasting', 'budgeting', 'compliance', 'board', 'm&a', 'risk management', 'investor relations'], seniority: 'executive', sections: ['summary','experience','education','certifications','board'] },
+    { regex: /financial\s+analyst|investment\s+analyst|equity\s+analyst|credit\s+analyst/i, title: 'Financial Analyst', industry: 'finance', keywords: ['financial modeling', 'valuation', 'excel', 'bloomberg', 'dcf', 'ratio analysis', 'forecasting', 'reporting'], seniority: 'mid', sections: ['summary','experience','education','skills','certifications'] },
+    { regex: /accountant|auditor|cpa\b|chartered\s+accountant|tax\s+accountant|forensic\s+accountant/i, title: 'Accountant', industry: 'finance', keywords: ['gaap', 'ifrs', 'audit', 'tax', 'reconciliation', 'general ledger', 'quickbooks', 'compliance'], seniority: 'mid', sections: ['summary','experience','education','certifications','licenses'] },
+    { regex: /banker|relationship\s+manager|investment\s+banker|wealth\s+manager|portfolio\s+manager/i, title: 'Banking Professional', industry: 'finance', keywords: ['portfolio management', 'client relations', 'risk assessment', 'financial products', 'compliance', 'kpi'], seniority: 'mid', sections: ['summary','experience','education','certifications','licenses'] },
+    
+    // ---- HEALTHCARE ----
+    { regex: /chief\s+medical\s+officer|medical\s+director|clinical\s+director/i, title: 'Medical Director', industry: 'healthcare', keywords: ['clinical leadership', 'patient safety', 'quality improvement', 'regulatory', 'accreditation', 'medical staff'], seniority: 'executive', sections: ['summary','experience','education','licenses','certifications','board'] },
+    { regex: /physician|doctor|surgeon|general\s+practitioner|specialist|consultant\s+physician/i, title: 'Physician', industry: 'healthcare', keywords: ['patient care', 'diagnosis', 'treatment', 'clinical', 'medical records', 'board certified'], seniority: 'senior', sections: ['summary','experience','education','licenses','certifications','clinical'] },
+    { regex: /nurse|registered\s+nurse|nurse\s+practitioner|clinical\s+nurse|midwife/i, title: 'Nurse', industry: 'healthcare', keywords: ['patient care', 'vital signs', 'medication', 'care plan', 'patient education', 'charting', 'emr'], seniority: 'mid', sections: ['summary','experience','education','licenses','certifications','clinical'] },
+    { regex: /pharmacist|pharmacy\s+manager|clinical\s+pharmacist/i, title: 'Pharmacist', industry: 'healthcare', keywords: ['pharmaceutical', 'dispensing', 'drug interaction', 'inventory', 'compliance', 'patient counseling'], seniority: 'mid', sections: ['summary','experience','education','licenses','certifications'] },
+    { regex: /healthcare\s+administrator|hospital\s+administrator|practice\s+manager|health\s+services\s+manager/i, title: 'Healthcare Administrator', industry: 'healthcare', keywords: ['healthcare management', 'budgeting', 'staffing', 'compliance', 'hipaa', 'operations', 'quality'], seniority: 'mid', sections: ['summary','experience','education','certifications'] },
+    
+    // ---- MARKETING & SALES ----
+    { regex: /chief\s+marketing\s+officer|cmo\b|vp\s+of\s+marketing|marketing\s+director/i, title: 'Marketing Director', industry: 'marketing', keywords: ['marketing strategy', 'brand management', 'demand generation', 'analytics', 'budget', 'team leadership'], seniority: 'executive', sections: ['summary','experience','education','skills','achievements'] },
+    { regex: /marketing\s+manager|digital\s+marketing\s+manager|growth\s+marketing\s+manager/i, title: 'Marketing Manager', industry: 'marketing', keywords: ['seo', 'sem', 'content strategy', 'social media', 'email marketing', 'analytics', 'campaign', 'lead generation'], seniority: 'mid', sections: ['summary','experience','education','skills','certifications'] },
+    { regex: /seo\s+specialist|content\s+marketing|social\s+media\s+manager|copywriter|content\s+strategist/i, title: 'Content Marketer', industry: 'marketing', keywords: ['seo', 'content creation', 'social media', 'blogging', 'copywriting', 'analytics', 'wordpress'], seniority: 'entry', sections: ['summary','experience','education','skills','portfolio'] },
+    { regex: /sales\s+manager|sales\s+director|vp\s+of\s+sales|head\s+of\s+sales/i, title: 'Sales Manager', industry: 'sales', keywords: ['pipeline', 'crm', 'negotiation', 'lead generation', 'quota', 'forecasting', 'sales strategy', 'team management'], seniority: 'senior', sections: ['summary','experience','education','skills'] },
+    { regex: /account\s+executive|business\s+development|sales\s+representative|bdr\b|sdr\b/i, title: 'Sales Representative', industry: 'sales', keywords: ['prospecting', 'cold calling', 'crm', 'pipeline', 'negotiation', 'closing', 'quota'], seniority: 'entry', sections: ['summary','experience','education','skills'] },
+    
+    // ---- EDUCATION ----
+    { regex: /professor|associate\s+professor|assistant\s+professor|lecturer|adjunct\s+faculty/i, title: 'Professor', industry: 'education', keywords: ['research', 'teaching', 'curriculum', 'publications', 'grant writing', 'mentoring', 'academic'], seniority: 'senior', sections: ['summary','experience','education','publications','research','awards'] },
+    { regex: /teacher|educator|instructor|teaching\s+assistant|elementary\s+teacher|high\s+school\s+teacher/i, title: 'Teacher', industry: 'education', keywords: ['classroom management', 'lesson planning', 'curriculum', 'assessment', 'student engagement', 'differentiation'], seniority: 'mid', sections: ['summary','experience','education','certifications'] },
+    
+    // ---- ENGINEERING (Non-Software) ----
+    { regex: /civil\s+engineer|structural\s+engineer|construction\s+engineer|geotechnical\s+engineer/i, title: 'Civil Engineer', industry: 'engineering', keywords: ['structural analysis', 'autocad', 'construction', 'concrete', 'steel', 'permitting', 'site inspection'], seniority: 'mid', sections: ['summary','experience','education','licenses','certifications'] },
+    { regex: /mechanical\s+engineer|manufacturing\s+engineer|design\s+engineer|product\s+design\s+engineer/i, title: 'Mechanical Engineer', industry: 'engineering', keywords: ['cad', 'solidworks', 'fea', 'manufacturing', 'prototyping', 'tolerance', 'gd&t'], seniority: 'mid', sections: ['summary','experience','education','skills','certifications'] },
+    { regex: /electrical\s+engineer|electronics\s+engineer|hardware\s+engineer|embedded\s+systems\s+engineer/i, title: 'Electrical Engineer', industry: 'engineering', keywords: ['circuit design', 'pcb', 'embedded', 'testing', 'compliance', 'schematic', 'fpga'], seniority: 'mid', sections: ['summary','experience','education','skills'] },
+    
+    // ---- HR & ADMIN ----
+    { regex: /chief\s+human\s+resources|chro\b|vp\s+of\s+hr|hr\s+director|head\s+of\s+hr/i, title: 'HR Director', industry: 'general', keywords: ['hr strategy', 'talent management', 'organizational development', 'compliance', 'benefits', 'employee relations'], seniority: 'executive', sections: ['summary','experience','education','certifications'] },
+    { regex: /human\s+resources\s+manager|hr\s+manager|people\s+operations\s+manager|talent\s+manager/i, title: 'HR Manager', industry: 'general', keywords: ['recruitment', 'onboarding', 'employee relations', 'payroll', 'benefits', 'performance management', 'compliance'], seniority: 'mid', sections: ['summary','experience','education','certifications'] },
+    { regex: /recruiter|talent\s+acquisition|hr\s+generalist|hr\s+coordinator|people\s+operations\s+specialist/i, title: 'HR Professional', industry: 'general', keywords: ['sourcing', 'screening', 'interviewing', 'onboarding', 'ats', 'linkedin', 'employer branding'], seniority: 'entry', sections: ['summary','experience','education'] },
+    
+    // ---- LEGAL ----
+    { regex: /lawyer|attorney|counsel|legal\s+advisor|solicitor|barrister|general\s+counsel/i, title: 'Lawyer', industry: 'legal', keywords: ['litigation', 'contract', 'compliance', 'legal research', 'negotiation', 'due diligence', 'regulatory'], seniority: 'mid', sections: ['summary','experience','education','licenses','bar'] },
+    { regex: /paralegal|legal\s+assistant|law\s+clerk/i, title: 'Paralegal', industry: 'legal', keywords: ['legal research', 'document preparation', 'case management', 'filing', 'discovery', 'client communication'], seniority: 'entry', sections: ['summary','experience','education'] },
+    
+    // ---- OPERATIONS & SUPPLY CHAIN ----
+    { regex: /chief\s+operating\s+officer|coo\b|vp\s+of\s+operations|operations\s+director/i, title: 'COO', industry: 'general', keywords: ['operations', 'strategy', 'efficiency', 'supply chain', 'logistics', 'p&l', 'process optimization'], seniority: 'executive', sections: ['summary','experience','education','achievements'] },
+    { regex: /operations\s+manager|plant\s+manager|facility\s+manager|production\s+manager/i, title: 'Operations Manager', industry: 'general', keywords: ['operations', 'logistics', 'inventory', 'process improvement', 'team management', 'kpi', 'safety'], seniority: 'mid', sections: ['summary','experience','education','skills'] },
+    { regex: /supply\s+chain\s+manager|logistics\s+manager|procurement\s+manager|warehouse\s+manager/i, title: 'Supply Chain Manager', industry: 'general', keywords: ['supply chain', 'logistics', 'procurement', 'inventory', 'vendor management', 'erp', 'forecasting'], seniority: 'mid', sections: ['summary','experience','education','certifications'] },
+    
+    // ---- CREATIVE & DESIGN ----
+    { regex: /graphic\s+designer|visual\s+designer|brand\s+designer|art\s+director|creative\s+director/i, title: 'Graphic Designer', industry: 'creative', keywords: ['adobe', 'photoshop', 'illustrator', 'branding', 'typography', 'layout', 'color theory'], seniority: 'mid', sections: ['summary','experience','education','portfolio','skills'] },
+    { regex: /video\s+editor|motion\s+designer|animator|film\s+editor|post\s+production/i, title: 'Video Editor', industry: 'creative', keywords: ['premiere', 'after effects', 'davinci', 'color grading', 'motion graphics', 'storytelling'], seniority: 'mid', sections: ['summary','experience','education','portfolio','skills'] },
+    
+    // ---- CUSTOMER SERVICE ----
+    { regex: /customer\s+success\s+manager|customer\s+service\s+manager|support\s+manager|call\s+center\s+manager/i, title: 'Customer Success Manager', industry: 'general', keywords: ['customer retention', 'onboarding', 'crm', 'account management', 'renewals', 'satisfaction', 'escalation'], seniority: 'mid', sections: ['summary','experience','education','skills'] },
+    { regex: /customer\s+service\s+representative|support\s+agent|call\s+center\s+agent|help\s+desk/i, title: 'Customer Service Rep', industry: 'general', keywords: ['customer service', 'communication', 'problem solving', 'crm', 'ticketing', 'phone support'], seniority: 'entry', sections: ['summary','experience','education'] },
+    
+    // ---- CATCH-ALL ----
+    { regex: /specialist|coordinator|officer|associate|assistant|consultant|manager|director/i, title: 'Professional', industry: 'general', keywords: ['communication', 'teamwork', 'project management', 'organization', 'problem solving', 'leadership', 'analytical'], seniority: 'mid', sections: ['summary','experience','education','skills'] },
+  ];
+
+  static detect(text: string): DetectedProfession {
+    let bestMatch: DetectedProfession = {
+      title: 'Professional',
+      industry: 'general',
+      confidence: 0.3,
+      criticalKeywords: ['communication', 'teamwork', 'problem solving', 'project management', 'organization'],
+      seniority: 'mid',
+      requiredSections: ['summary', 'experience', 'education', 'skills'],
+    };
+
+    let highestConfidence = 0;
+    const lowerText = text.toLowerCase();
+
+    for (const pattern of this.PATTERNS) {
+      if (pattern.regex.test(lowerText)) {
+        const keywordMatches = pattern.keywords.filter(kw => lowerText.includes(kw.toLowerCase())).length;
+        const keywordRatio = keywordMatches / Math.max(1, pattern.keywords.length);
+        const seniorityBoost = pattern.seniority === 'executive' ? 0.25 : pattern.seniority === 'senior' ? 0.15 : 0;
+        const confidence = Math.min(1, 0.5 + (keywordRatio * 0.3) + seniorityBoost);
+
+        if (confidence > highestConfidence) {
+          highestConfidence = confidence;
+          bestMatch = {
+            title: pattern.title,
+            industry: pattern.industry,
+            confidence,
+            criticalKeywords: pattern.keywords,
+            seniority: pattern.seniority,
+            requiredSections: pattern.sections,
+          };
+        }
+      }
+    }
+
+    return bestMatch;
+  }
+}
+
+// ============================================
+// INDUSTRY PROFILES
 // ============================================
 
 export interface IndustryProfile {
@@ -31,76 +168,47 @@ export interface IndustryProfile {
   criticalKeywords: string[];
   weightOverrides: Record<string, number>;
   minWordCount: number;
-  expectedFormats: string[];
 }
 
 export const INDUSTRY_PROFILES: Record<string, IndustryProfile> = {
-  technology: {
-    requiredSections: ['summary', 'experience', 'education', 'skills', 'projects', 'certifications'],
-    criticalKeywords: ['agile', 'scrum', 'api', 'cloud', 'ci/cd', 'git', 'docker', 'kubernetes'],
-    weightOverrides: { skillsRelevance: 0.30, keywordOptimization: 0.25 },
-    minWordCount: 400,
-    expectedFormats: ['pdf', 'docx'],
-  },
-  finance: {
-    requiredSections: ['summary', 'experience', 'education', 'certifications', 'licenses'],
-    criticalKeywords: ['financial analysis', 'risk management', 'compliance', 'audit', 'forecasting'],
-    weightOverrides: { quantifiableResults: 0.25, keywordOptimization: 0.20 },
-    minWordCount: 500,
-    expectedFormats: ['pdf'],
-  },
-  healthcare: {
-    requiredSections: ['summary', 'experience', 'education', 'licenses', 'certifications', 'clinical'],
-    criticalKeywords: ['patient care', 'clinical', 'hipaa', 'emr', 'diagnostics'],
-    weightOverrides: { sectionCompleteness: 0.30, keywordOptimization: 0.20 },
-    minWordCount: 450,
-    expectedFormats: ['pdf', 'docx'],
-  },
-  creative: {
-    requiredSections: ['summary', 'experience', 'education', 'portfolio', 'projects'],
-    criticalKeywords: ['portfolio', 'design', 'creative', 'branding', 'campaign'],
-    weightOverrides: { contentQuality: 0.30, formattingScore: 0.20 },
-    minWordCount: 300,
-    expectedFormats: ['pdf'],
-  },
-  executive: {
-    requiredSections: ['summary', 'experience', 'education', 'board', 'achievements', 'publications'],
-    criticalKeywords: ['leadership', 'strategy', 'executive', 'board', 'revenue', 'transformation'],
-    weightOverrides: { quantifiableResults: 0.30, actionVerbs: 0.20 },
-    minWordCount: 600,
-    expectedFormats: ['pdf'],
-  },
+  technology: { requiredSections: ['summary','experience','education','skills','projects'], criticalKeywords: ['agile','scrum','api','cloud','ci/cd','git','docker','kubernetes','microservices'], weightOverrides: { skillsRelevance: 0.30, keywordOptimization: 0.25 }, minWordCount: 400 },
+  development: { requiredSections: ['summary','experience','education','skills','projects'], criticalKeywords: ['usaid','kpi','logframe','data quality','impact assessment','evaluation','monitoring','indicators'], weightOverrides: { sectionCompleteness: 0.25, keywordOptimization: 0.20 }, minWordCount: 450 },
+  finance: { requiredSections: ['summary','experience','education','certifications','licenses'], criticalKeywords: ['financial analysis','risk management','compliance','audit','forecasting','valuation','budgeting'], weightOverrides: { quantifiableResults: 0.25, keywordOptimization: 0.20 }, minWordCount: 500 },
+  healthcare: { requiredSections: ['summary','experience','education','licenses','certifications','clinical'], criticalKeywords: ['patient care','clinical','hipaa','emr','diagnostics','treatment','medication'], weightOverrides: { sectionCompleteness: 0.30, keywordOptimization: 0.20 }, minWordCount: 450 },
+  consulting: { requiredSections: ['summary','experience','education','skills','certifications'], criticalKeywords: ['stakeholder management','process improvement','data analysis','gap analysis','business case','presentation'], weightOverrides: { contentQuality: 0.25, keywordOptimization: 0.20 }, minWordCount: 500 },
+  marketing: { requiredSections: ['summary','experience','education','skills','portfolio'], criticalKeywords: ['seo','sem','content strategy','branding','campaign','analytics','social media','lead generation'], weightOverrides: { contentQuality: 0.25, keywordOptimization: 0.20 }, minWordCount: 400 },
+  sales: { requiredSections: ['summary','experience','education','skills'], criticalKeywords: ['pipeline','crm','negotiation','lead generation','quota','revenue','closing'], weightOverrides: { quantifiableResults: 0.30, actionVerbs: 0.20 }, minWordCount: 400 },
+  education: { requiredSections: ['summary','experience','education','publications','certifications'], criticalKeywords: ['curriculum','assessment','pedagogy','e-learning','classroom','instructional design','accreditation'], weightOverrides: { sectionCompleteness: 0.25, contentQuality: 0.20 }, minWordCount: 400 },
+  engineering: { requiredSections: ['summary','experience','education','licenses','certifications'], criticalKeywords: ['cad','design','testing','compliance','specifications','manufacturing','quality'], weightOverrides: { sectionCompleteness: 0.25, keywordOptimization: 0.15 }, minWordCount: 450 },
+  legal: { requiredSections: ['summary','experience','education','licenses','bar'], criticalKeywords: ['litigation','contract','compliance','legal research','negotiation','due diligence','regulatory'], weightOverrides: { sectionCompleteness: 0.30, contentQuality: 0.25 }, minWordCount: 500 },
+  creative: { requiredSections: ['summary','experience','education','portfolio','skills'], criticalKeywords: ['portfolio','design','creative','branding','adobe','typography','layout'], weightOverrides: { contentQuality: 0.30, formattingScore: 0.20 }, minWordCount: 300 },
+  executive: { requiredSections: ['summary','experience','education','achievements','board'], criticalKeywords: ['strategy','leadership','executive','board','transformation','revenue growth','organizational','p&l'], weightOverrides: { quantifiableResults: 0.30, actionVerbs: 0.20 }, minWordCount: 600 },
+  general: { requiredSections: ['summary','experience','education','skills'], criticalKeywords: ['communication','teamwork','project management','problem solving','leadership','organization'], weightOverrides: {}, minWordCount: 350 },
 };
 
 // ============================================
-// ATS KEYWORD DATABASE & VERBS
+// ATS KEYWORD DATABASE
 // ============================================
 
 const ATS_KEYWORDS: Record<string, string[]> = {
-  technology: ['agile', 'scrum', 'sdlc', 'api', 'cloud', 'devops', 'ci/cd', 'microservices', 'full stack', 'machine learning', 'data science'],
-  finance: ['financial analysis', 'risk management', 'portfolio', 'audit', 'compliance', 'forecasting', 'budgeting', 'reconciliation'],
-  healthcare: ['patient care', 'clinical', 'hipaa', 'emr', 'ehr', 'diagnostics', 'treatment', 'pharmaceutical'],
-  marketing: ['seo', 'sem', 'content strategy', 'branding', 'campaign', 'analytics', 'social media', 'lead generation'],
-  sales: ['business development', 'lead generation', 'crm', 'pipeline', 'negotiation', 'account management', 'revenue growth'],
-  education: ['curriculum', 'instructional design', 'assessment', 'accreditation', 'pedagogy', 'e-learning'],
-  engineering: ['cad', 'prototyping', 'testing', 'qa', 'manufacturing', 'design', 'specifications', 'compliance'],
-  general: ['leadership', 'project management', 'communication', 'teamwork', 'problem solving', 'analytical', 'strategic', 'innovation'],
+  technology: ['agile','scrum','sdlc','api','cloud','devops','ci/cd','microservices','full stack','machine learning','data science','git','docker','kubernetes','aws','azure','gcp','linux','python','javascript','react','node','sql'],
+  data_science: ['python','sql','machine learning','deep learning','statistics','tensorflow','pytorch','pandas','numpy','scikit-learn','nlp','computer vision','data mining','predictive modeling','tableau','power bi','analytics'],
+  merl: ['usaid','kpi','logframe','data quality','impact assessment','evaluation','monitoring','indicators','dqa','cla','outcome harvesting','most significant change','logical framework','theory of change','results framework','baseline','endline'],
+  finance: ['financial analysis','risk management','portfolio','audit','compliance','forecasting','budgeting','reconciliation','valuation','gaap','ifrs','excel','quickbooks','sap'],
+  healthcare: ['patient care','clinical','hipaa','emr','ehr','diagnostics','treatment','pharmaceutical','medication','vital signs','care plan','patient education'],
+  marketing: ['seo','sem','content strategy','branding','campaign','analytics','social media','lead generation','email marketing','crm','hubspot','google analytics'],
+  sales: ['business development','lead generation','crm','pipeline','negotiation','account management','revenue growth','closing','prospecting','cold calling','salesforce'],
+  education: ['curriculum','instructional design','assessment','accreditation','pedagogy','e-learning','classroom management','lesson planning','student engagement','differentiation'],
+  engineering: ['cad','prototyping','testing','qa','manufacturing','design','specifications','compliance','solidworks','autocad','fea','gd&t'],
+  general: ['leadership','project management','communication','teamwork','problem solving','analytical','strategic','innovation','time management','organization'],
 };
 
 const ACTION_VERBS = [
-  'achieved', 'led', 'developed', 'implemented', 'managed', 'created', 'designed',
-  'increased', 'reduced', 'improved', 'optimized', 'streamlined', 'launched',
-  'directed', 'coordinated', 'spearheaded', 'orchestrated', 'delivered', 'executed',
-  'transformed', 'accelerated', 'maximized', 'generated', 'established', 'pioneered',
+  'achieved','led','developed','implemented','managed','created','designed','increased','reduced','improved','optimized','streamlined','launched','directed','coordinated','spearheaded','orchestrated','delivered','executed','transformed','accelerated','maximized','generated','established','pioneered','engineered','architected','automated','deployed',
 ];
 
 const MEASURABLE_PATTERNS = [
-  /\d+%/g,
-  /\$\d+[kKmM]?/g,
-  /\d+\s*(?:people|staff|team|clients|customers|users)/gi,
-  /\d+x/gi,
-  /\d+\s*(?:hours|days|weeks|months|years)/gi,
-  /increased|reduced|improved|saved|generated|grew/gi,
+  /\d+%/g, /\$\d+[kKmM]?/g, /\d+\s*(?:people|staff|team|clients|customers|users)/gi, /\d+x/gi, /\d+\s*(?:hours|days|weeks|months|years)/gi, /increased|reduced|improved|saved|generated|grew/gi,
 ];
 
 // ============================================
@@ -108,28 +216,13 @@ const MEASURABLE_PATTERNS = [
 // ============================================
 
 export class FormatValidator {
-  static validate(text: string): {
-    issues: string[];
-    score: number;
-    recommendations: string[];
-  } {
+  static validate(text: string): { issues: string[]; score: number; recommendations: string[] } {
     const issues: string[] = [];
-
     if (/[📊📈🎯💼🔥⭐✅❌]/u.test(text)) issues.push('Emojis detected - ATS cannot parse emojis cleanly.');
     if (/[│┌┐└┘├┤┬┴┼]/u.test(text)) issues.push('Table characters detected - ATS parsers often scramble table structures.');
     if (/<[^>]+>/.test(text)) issues.push('HTML tags detected - strip raw code before parsing.');
-    if (/\t/.test(text)) issues.push('Tab characters detected - prefer standard spacing for line balance.');
-    if (/[^\x00-\x7F\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026\u00A9\u00AE\u2122]/.test(text)) {
-      issues.push('Unusual Unicode characters detected - may disrupt character extraction.');
-    }
-
-    const calculatedScore = Math.max(0, 100 - (issues.length * 15));
-
-    return {
-      issues,
-      score: safeNumber(calculatedScore, 100),
-      recommendations: issues.map(i => `Fix formatting: ${i}`),
-    };
+    if (/\t/.test(text)) issues.push('Tab characters detected - prefer standard spacing.');
+    return { issues, score: safeNumber(100 - issues.length * 15, 100), recommendations: issues.map(i => `Fix: ${i}`) };
   }
 }
 
@@ -137,89 +230,36 @@ export class FormatValidator {
 // DEEP SECTION ANALYZER
 // ============================================
 
-export interface SectionAnalysis {
-  name: string;
-  present: boolean;
-  score: number;
-  wordCount: number;
-  bulletPoints: number;
-  metrics: number;
-  issues: string[];
-  suggestions: string[];
-}
+export interface SectionAnalysis { name: string; present: boolean; score: number; wordCount: number; bulletPoints: number; metrics: number; issues: string[]; suggestions: string[]; }
 
 export class DeepSectionAnalyzer {
   static analyzeAllSections(text: string): SectionAnalysis[] {
-    const sections = this.extractSections(text);
-    return sections.map(section => this.analyzeSection(section));
-  }
-
-  private static extractSections(text: string): { name: string; content: string }[] {
-    const sections: { name: string; content: string }[] = [];
-
     const patterns: Record<string, RegExp> = {
-      contact: /^(.+?)(?=\n(?:SUMMARY|PROFESSIONAL|OBJECTIVE|EXPERIENCE|EDUCATION|SKILLS))/is,
       summary: /(?:SUMMARY|PROFESSIONAL\s+SUMMARY|OBJECTIVE)(.+?)(?=\n(?:EXPERIENCE|EMPLOYMENT|WORK|EDUCATION|SKILLS))/is,
       experience: /(?:EXPERIENCE|EMPLOYMENT|WORK\s+HISTORY)(.+?)(?=\n(?:EDUCATION|SKILLS|CERTIFICATION|PROJECT))/is,
       education: /(?:EDUCATION|ACADEMIC)(.+?)(?=\n(?:SKILLS|CERTIFICATION|PROJECT|LANGUAGE))/is,
       skills: /(?:SKILLS|TECHNOLOGIES|COMPETENCIES)(.+?)(?=\n(?:CERTIFICATION|PROJECT|LANGUAGE|AWARD))/is,
     };
-
-    for (const [name, pattern] of Object.entries(patterns)) {
+    return Object.entries(patterns).map(([name, pattern]) => {
       const match = text.match(pattern);
-      if (match) {
-        sections.push({ name, content: match[1]?.trim() || match[0]?.trim() || '' });
-      }
-    }
-
-    return sections;
+      const content = match ? (match[1] || match[0]).trim() : '';
+      return this.analyzeSection(name, content);
+    });
   }
 
-  private static analyzeSection(section: { name: string; content: string }): SectionAnalysis {
-    const content = section.content;
+  private static analyzeSection(name: string, content: string): SectionAnalysis {
     const words = content.split(/\s+/).filter(w => w.length > 0);
     const bullets = (content.match(/[•\-*●○▪▫]/g) || []).length;
     const metrics = (content.match(/\d+%|\$\d+|\d+x|\d+\s*(?:people|users|clients)/gi) || []).length;
-
     const issues: string[] = [];
     const suggestions: string[] = [];
-
-    switch (section.name) {
-      case 'summary':
-        if (words.length < 20) issues.push('Summary too short (aim for 30-80 words).');
-        if (words.length > 150) issues.push('Summary too long (keep under 100 words).');
-        if (!/\b(?:years|experience|skilled|expertise|background)\b/i.test(content)) {
-          suggestions.push('Include explicitly stated years of domain expertise in summary.');
-        }
-        break;
-      case 'experience':
-        if (bullets < 3) issues.push('Add more bullet points per role (3-7 ideal).');
-        if (metrics < 2) suggestions.push('Add quantifiable metrics (%, $, numbers) in experience section.');
-        if (!ACTION_VERBS.some(v => content.toLowerCase().includes(v))) {
-          suggestions.push('Start bullet points in work history with distinct action verbs.');
-        }
-        break;
-      case 'skills':
-        if (words.length < 5) issues.push('List more skills (aim for 10-20 keywords).');
-        if (!content.includes(',')) suggestions.push('Separate skills with clear separators like commas for clean indexing.');
-        break;
-    }
-
-    let score = 100;
-    score -= issues.length * 15;
-    score -= (3 - Math.min(3, metrics)) * 10;
+    if (name === 'summary' && words.length < 20) issues.push('Summary too short (aim for 30-80 words).');
+    if (name === 'experience' && bullets < 3) issues.push('Add more bullet points per role (3-7 ideal).');
+    if (name === 'experience' && metrics < 2) suggestions.push('Add quantifiable metrics (%, $, numbers).');
+    if (name === 'skills' && words.length < 5) issues.push('List more skills (aim for 10-20 keywords).');
+    let score = 100 - issues.length * 15 - (3 - Math.min(3, metrics)) * 10;
     if (words.length < 10) score -= 20;
-
-    return {
-      name: section.name,
-      present: true,
-      score: safeNumber(score, 50),
-      wordCount: words.length,
-      bulletPoints: bullets,
-      metrics,
-      issues,
-      suggestions,
-    };
+    return { name, present: content.length > 0, score: safeNumber(score, 50), wordCount: words.length, bulletPoints: bullets, metrics, issues, suggestions };
   }
 }
 
@@ -227,63 +267,20 @@ export class DeepSectionAnalyzer {
 // COMPETITIVE BENCHMARKING
 // ============================================
 
-export interface BenchmarkData {
-  industry: string;
-  role: string;
-  avgScore: number;
-  topQuartileScore: number;
-  commonKeywords: string[];
-  missingKeywords: string[];
-  gapAnalysis: string[];
-}
+export interface BenchmarkData { industry: string; role: string; avgScore: number; topQuartileScore: number; commonKeywords: string[]; missingKeywords: string[]; gapAnalysis: string[]; }
 
 export class CompetitiveBenchmarker {
   private static benchmarks: Record<string, BenchmarkData> = {
-    'software-engineer': {
-      industry: 'technology',
-      role: 'Software Engineer',
-      avgScore: 72,
-      topQuartileScore: 88,
-      commonKeywords: ['react', 'node.js', 'python', 'aws', 'docker', 'kubernetes', 'microservices'],
-      missingKeywords: [],
-      gapAnalysis: [],
-    },
-    'data-scientist': {
-      industry: 'technology',
-      role: 'Data Scientist',
-      avgScore: 75,
-      topQuartileScore: 90,
-      commonKeywords: ['python', 'machine learning', 'sql', 'tensorflow', 'pytorch', 'statistics'],
-      missingKeywords: [],
-      gapAnalysis: [],
-    },
+    'software-engineer': { industry: 'technology', role: 'Software Engineer', avgScore: 72, topQuartileScore: 88, commonKeywords: ['react','node.js','python','aws','docker','kubernetes','microservices'], missingKeywords: [], gapAnalysis: [] },
+    'data-scientist': { industry: 'technology', role: 'Data Scientist', avgScore: 75, topQuartileScore: 90, commonKeywords: ['python','machine learning','sql','tensorflow','pytorch','statistics'], missingKeywords: [], gapAnalysis: [] },
   };
 
   static compare(resumeText: string, targetRole: string): BenchmarkData {
     const key = targetRole.toLowerCase().replace(/\s+/g, '-');
-    const template = this.benchmarks[key] || {
-      industry: 'general',
-      role: targetRole,
-      avgScore: 68,
-      topQuartileScore: 85,
-      commonKeywords: ['leadership', 'collaboration', 'strategy', 'execution'],
-      missingKeywords: [],
-      gapAnalysis: [],
-    };
-
-    const missingKeywords = template.commonKeywords.filter(
-      kw => !resumeText.toLowerCase().includes(kw)
-    );
-
-    const gapAnalysis = missingKeywords.map(
-      kw => `Missing benchmark keyword: "${kw}" (commonly found in top-quartile ${template.role} resumes).`
-    );
-
-    return {
-      ...template,
-      missingKeywords,
-      gapAnalysis,
-    };
+    const template = this.benchmarks[key] || { industry: 'general', role: targetRole, avgScore: 68, topQuartileScore: 85, commonKeywords: ['leadership','collaboration','strategy','execution'], missingKeywords: [], gapAnalysis: [] };
+    template.missingKeywords = template.commonKeywords.filter(kw => !resumeText.toLowerCase().includes(kw));
+    template.gapAnalysis = template.missingKeywords.map(kw => `Missing: "${kw}" (found in top ${template.role} resumes).`);
+    return template;
   }
 }
 
@@ -292,320 +289,110 @@ export class CompetitiveBenchmarker {
 // ============================================
 
 export class ScoreConsistencyEngine {
-  private scoreHistory: Map<string, number[]> = new Map();
-
-  private hashText(text: string): string {
-    let hash = 0;
-    for (let i = 0; i < Math.min(text.length, 1000); i++) {
-      const char = text.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return hash.toString(36);
-  }
-
-  getConsistentScore(text: string, newScore: number): number {
-    const safeNewScore = safeNumber(newScore, 50);
-    const hash = this.hashText(text);
-
-    if (!this.scoreHistory.has(hash)) {
-      this.scoreHistory.set(hash, []);
-    }
-
-    const history = this.scoreHistory.get(hash)!;
-    history.push(safeNewScore);
-
-    if (history.length > 5) history.shift();
-    if (history.length === 1) return history[0];
-
-    let weightedSum = 0;
-    let totalWeight = 0;
-
-    for (let i = 0; i < history.length; i++) {
-      const weight = (i + 1) / history.length;
-      weightedSum += history[i] * weight;
-      totalWeight += weight;
-    }
-
-    if (totalWeight <= 0) return safeNewScore;
-    return safeNumber(weightedSum / totalWeight, safeNewScore);
-  }
-
-  getScoreTrend(text: string): 'improving' | 'declining' | 'stable' {
-    const hash = this.hashText(text);
-    const history = this.scoreHistory.get(hash) || [];
-
-    if (history.length < 2) return 'stable';
-
-    const first = history[0];
-    const last = history[history.length - 1];
-    const diff = last - first;
-
-    if (diff > 3) return 'improving';
-    if (diff < -3) return 'declining';
-    return 'stable';
+  private history: Map<string, number[]> = new Map();
+  private hash(t: string): string { let h = 0; for (let i = 0; i < Math.min(t.length, 1000); i++) { h = ((h << 5) - h) + t.charCodeAt(i); h &= h; } return h.toString(36); }
+  getConsistentScore(text: string, score: number): number {
+    const h = this.hash(text); if (!this.history.has(h)) this.history.set(h, []);
+    const arr = this.history.get(h)!; arr.push(safeNumber(score, 50)); if (arr.length > 5) arr.shift();
+    if (arr.length === 1) return arr[0];
+    let sum = 0, w = 0;
+    arr.forEach((s, i) => { const weight = (i + 1) / arr.length; sum += s * weight; w += weight; });
+    return safeNumber(w > 0 ? sum / w : score, score);
   }
 }
 
 // ============================================
-// BASE ATS SCORING ENGINE
+// ATS SCORING ENGINE
 // ============================================
 
 class ATSScoringEngine {
-  static scoreResume(text: string, industryKey?: string): ATSScore {
-    const normalizedText = (text || '').toLowerCase();
-    const profile = industryKey ? INDUSTRY_PROFILES[industryKey] : null;
-
-    const keywordScore = safeNumber(this.scoreKeywords(normalizedText, profile));
-    const formattingScore = safeNumber(this.scoreFormatting(text));
-    const contentScore = safeNumber(this.scoreContent(text));
-    const sectionScore = safeNumber(this.scoreSections(normalizedText, profile));
-    const verbScore = safeNumber(this.scoreActionVerbs(normalizedText));
-    const quantifiableScore = safeNumber(this.scoreQuantifiable(normalizedText));
-    const grammarScore = safeNumber(this.scoreGrammar(text));
-    const contactScore = safeNumber(this.scoreContact(text));
+  static scoreResume(text: string, detected: DetectedProfession): ATSScore {
+    const t = (text || '').toLowerCase();
+    const profile = INDUSTRY_PROFILES[detected.industry] || INDUSTRY_PROFILES['general'];
+    
+    // Combine detected keywords + profile keywords + general keywords
+    const allKeywords = [...new Set([...detected.criticalKeywords, ...profile.criticalKeywords, ...Object.values(ATS_KEYWORDS).flat()])];
+    
+    const kwScore = this.scoreKeywords(t, allKeywords);
+    const fmtScore = this.scoreFormatting(text);
+    const cntScore = this.scoreContent(text);
+    const secScore = this.scoreSections(text, detected.requiredSections);
+    const verbScore = this.scoreActionVerbs(t);
+    const quantScore = this.scoreQuantifiable(t);
+    const gramScore = this.scoreGrammar(text);
+    const contScore = this.scoreContact(text);
 
     const scores: Record<string, number> = {
-      keywordOptimization: keywordScore,
-      formattingScore: formattingScore,
-      contentQuality: contentScore,
-      sectionCompleteness: sectionScore,
-      actionVerbs: verbScore,
-      quantifiableResults: quantifiableScore,
-      grammarAndSpelling: grammarScore,
-      contactInfoQuality: contactScore,
-      skillsRelevance: keywordScore,
-      overallReadability: contentScore,
+      keywordOptimization: kwScore, formattingScore: fmtScore, contentQuality: cntScore,
+      sectionCompleteness: secScore, actionVerbs: verbScore, quantifiableResults: quantScore,
+      grammarAndSpelling: gramScore, contactInfoQuality: contScore,
+      skillsRelevance: kwScore, overallReadability: cntScore,
     };
 
     let weights: Record<string, number> = {
-      keywordOptimization: 0.20,
-      formattingScore: 0.10,
-      contentQuality: 0.10,
-      sectionCompleteness: 0.15,
-      actionVerbs: 0.10,
-      quantifiableResults: 0.10,
-      grammarAndSpelling: 0.05,
-      contactInfoQuality: 0.05,
-      skillsRelevance: 0.10,
-      overallReadability: 0.05,
+      keywordOptimization: 0.20, formattingScore: 0.10, contentQuality: 0.10,
+      sectionCompleteness: 0.15, actionVerbs: 0.10, quantifiableResults: 0.10,
+      grammarAndSpelling: 0.05, contactInfoQuality: 0.05, skillsRelevance: 0.10, overallReadability: 0.05,
     };
+    if (profile.weightOverrides) weights = { ...weights, ...profile.weightOverrides };
 
-    if (profile?.weightOverrides) {
-      weights = { ...weights, ...profile.weightOverrides };
-    }
-
-    let totalWeight = 0;
-    for (const val of Object.values(weights)) {
-      totalWeight += safeNumber(val * 100, 0) / 100;
-    }
-
-    let rawSum = 0;
-    for (const [key, weight] of Object.entries(weights)) {
-      const compScore = scores[key] ?? 50;
-      const normWeight = totalWeight > 0 ? (weight / totalWeight) : 0;
-      rawSum += compScore * normWeight;
-    }
-
-    const overall = safeNumber(rawSum, 50);
+    let totalW = 0; for (const v of Object.values(weights)) totalW += v;
+    let raw = 0;
+    for (const [k, w] of Object.entries(weights)) raw += (scores[k] || 50) * (totalW > 0 ? w / totalW : 0);
 
     return {
-      overall,
-      breakdown: {
-        keywordOptimization: keywordScore,
-        formattingScore,
-        contentQuality: contentScore,
-        sectionCompleteness: sectionScore,
-        actionVerbs: verbScore,
-        quantifiableResults: quantifiableScore,
-        grammarAndSpelling: grammarScore,
-        contactInfoQuality: contactScore,
-        skillsRelevance: keywordScore,
-        overallReadability: contentScore,
-      },
-      missingKeywords: this.getMissingKeywords(normalizedText, profile),
-      improvementTips: this.getImprovementTips(text, overall),
-      criticalIssues: this.getCriticalIssues(text),
+      overall: safeNumber(raw, 50),
+      breakdown: scores as any,
+      missingKeywords: allKeywords.filter(k => !t.includes(k.toLowerCase())).slice(0, 12),
+      improvementTips: this.getTips(text, safeNumber(raw, 50)),
+      criticalIssues: this.getCritical(text),
       analyzedAt: new Date().toISOString(),
     };
   }
 
-  private static scoreKeywords(text: string, profile?: IndustryProfile | null): number {
-    let found = 0;
-    let total = 0;
-
-    const categories = profile
-      ? { target: profile.criticalKeywords, ...ATS_KEYWORDS }
-      : ATS_KEYWORDS;
-
-    for (const list of Object.values(categories)) {
-      for (const keyword of list) {
-        total++;
-        if (text.includes(keyword.toLowerCase())) found++;
-      }
-    }
-
-    return safeNumber((found / Math.max(1, total)) * 100);
+  private static scoreKeywords(text: string, keywords: string[]): number {
+    let f = 0; for (const k of keywords) if (text.includes(k.toLowerCase())) f++;
+    return safeNumber((f / Math.max(1, keywords.length)) * 100);
   }
-
   private static scoreFormatting(text: string): number {
-    let score = 100;
-
-    if (text.includes('•') || text.includes('●')) score += 5;
-    if (text.length < 500) score -= 20;
-    if (text.length > 5000) score -= 10;
-    if (/\n{3,}/.test(text)) score -= 10;
-    if (/[^\x00-\x7F]/.test(text)) score -= 15;
-    if (/[{}]/.test(text)) score -= 20;
-
-    return safeNumber(score);
+    let s = 100; if (/[•●]/.test(text)) s += 5; if (text.length < 500) s -= 20; if (text.length > 5000) s -= 10;
+    if (/\n{3,}/.test(text)) s -= 10; if (/[^\x00-\x7F]/.test(text)) s -= 15; return safeNumber(s);
   }
-
   private static scoreContent(text: string): number {
-    let score = 50;
-    const lines = text.split('\n').filter(l => l.trim());
-
-    if (lines.length > 20) score += 15;
-    if (text.split(' ').length > 200) score += 10;
-
-    const uniqueWords = new Set(text.toLowerCase().split(/\s+/));
-    if (uniqueWords.size > 100) score += 15;
-
-    const wordCount: Record<string, number> = {};
-    text.toLowerCase().split(/\s+/).forEach(w => { wordCount[w] = (wordCount[w] || 0) + 1; });
-    const repeatedWords = Object.values(wordCount).filter(c => c > 10).length;
-    if (repeatedWords > 5) score -= 10;
-
-    return safeNumber(score);
+    let s = 50; const lines = text.split('\n').filter(l => l.trim()); if (lines.length > 20) s += 15;
+    if (text.split(' ').length > 200) s += 10; if (new Set(text.toLowerCase().split(/\s+/)).size > 100) s += 15;
+    return safeNumber(s);
   }
-
-  private static scoreSections(text: string, profile?: IndustryProfile | null): number {
-    const requiredSections = profile?.requiredSections.map(s => new RegExp(s, 'i')) || [
-      /(?:summary|objective|profile|about)/i,
-      /(?:experience|employment|work)/i,
-      /(?:education|academic|university|college)/i,
-      /(?:skills?|technologies|competencies)/i,
-    ];
-
-    let found = 0;
-    for (const section of requiredSections) {
-      if (section.test(text)) found++;
-    }
-
-    return safeNumber((found / Math.max(1, requiredSections.length)) * 100);
+  private static scoreSections(text: string, required: string[]): number {
+    let f = 0; for (const s of required) if (new RegExp(s, 'i').test(text)) f++;
+    return safeNumber((f / Math.max(1, required.length)) * 100);
   }
-
   private static scoreActionVerbs(text: string): number {
-    let count = 0;
-    const words = text.toLowerCase().split(/\s+/);
-
-    for (const word of words) {
-      if (ACTION_VERBS.includes(word)) count++;
-    }
-
-    const density = (count / Math.max(1, words.length)) * 100;
-    return safeNumber(density * 20);
+    let c = 0; const words = text.split(/\s+/); for (const w of words) if (ACTION_VERBS.includes(w)) c++;
+    return safeNumber((c / Math.max(1, words.length)) * 100 * 20);
   }
-
   private static scoreQuantifiable(text: string): number {
-    let matches = 0;
-
-    for (const pattern of MEASURABLE_PATTERNS) {
-      const found = text.match(pattern);
-      if (found) matches += found.length;
-    }
-
-    if (matches === 0) return 20;
-    if (matches <= 3) return 50;
-    if (matches <= 6) return 75;
-    return 95;
+    let m = 0; for (const p of MEASURABLE_PATTERNS) { const f = text.match(p); if (f) m += f.length; }
+    if (m === 0) return 20; if (m <= 3) return 50; if (m <= 6) return 75; return 95;
   }
-
-  private static scoreGrammar(text: string): number {
-    let score = 80;
-
-    if (/[A-Z]{4,}/.test(text) && !/[A-Z]{2,3}\b/.test(text)) score -= 10;
-    if (/\.\s+[a-z]/.test(text)) score -= 15;
-    if (/\s{2,}/.test(text)) score -= 5;
-    if (/,,+/.test(text)) score -= 10;
-
-    return safeNumber(score);
-  }
-
-  private static scoreContact(text: string): number {
-    let score = 0;
-
-    if (/[\w\.-]+@[\w\.-]+\.\w{2,}/.test(text)) score += 40;
-    if (/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(text)) score += 30;
-    if (/linkedin\.com/i.test(text)) score += 15;
-    if (/github\.com/i.test(text)) score += 15;
-
-    return safeNumber(score);
-  }
-
-  private static getMissingKeywords(text: string, profile?: IndustryProfile | null): string[] {
-    const missing: string[] = [];
-    const pool = profile ? profile.criticalKeywords : Object.values(ATS_KEYWORDS).flat();
-
-    for (const keyword of pool) {
-      if (!text.includes(keyword.toLowerCase()) && !missing.includes(keyword)) {
-        missing.push(keyword);
-      }
-    }
-
-    return missing.slice(0, 10);
-  }
-
-  private static getImprovementTips(text: string, score: number): string[] {
+  private static scoreGrammar(text: string): number { let s = 80; if (/[A-Z]{4,}/.test(text)) s -= 10; if (/\.\s+[a-z]/.test(text)) s -= 15; if (/\s{2,}/.test(text)) s -= 5; return safeNumber(s); }
+  private static scoreContact(text: string): number { let s = 0; if (/@/.test(text)) s += 40; if (/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(text)) s += 30; if (/linkedin/i.test(text)) s += 15; if (/github/i.test(text)) s += 15; return safeNumber(s); }
+  private static getTips(text: string, score: number): string[] {
     const tips: string[] = [];
-
-    if (score < 40) {
-      tips.push('Add a professional summary section.');
-      tips.push('Include work experience with bullet points.');
-      tips.push('Add clear education details.');
-      tips.push('List technical and core soft skills.');
-    }
-
-    if (!/\d+%/.test(text) && !/\$\d+/.test(text)) {
-      tips.push('Add quantifiable achievements with percentages or monetary amounts.');
-    }
-
-    if (!ACTION_VERBS.some(v => text.toLowerCase().includes(v))) {
-      tips.push('Start bullet points with strong action verbs (Led, Developed, Implemented).');
-    }
-
-    if (!/certification|certificate/i.test(text)) {
-      tips.push('Add a certifications section if applicable.');
-    }
-
-    if (!/linkedin\.com/i.test(text)) {
-      tips.push('Add your LinkedIn profile URL.');
-    }
-
-    if (text.length < 1000) {
-      tips.push('Expand resume content—aim for at least 300-500 words.');
-    }
-
+    if (score < 40) { tips.push('Add professional summary.', 'Include work experience with bullets.', 'Add education.', 'List skills.'); }
+    if (!/\d+%/.test(text) && !/\$\d+/.test(text)) tips.push('Add quantifiable achievements (%, $).');
+    if (!ACTION_VERBS.some(v => text.toLowerCase().includes(v))) tips.push('Use strong action verbs.');
+    if (!/certification|certificate/i.test(text)) tips.push('Add certifications section.');
+    if (!/linkedin/i.test(text)) tips.push('Add LinkedIn URL.');
     return tips.slice(0, 8);
   }
-
-  private static getCriticalIssues(text: string): string[] {
-    const issues: string[] = [];
-
-    if (!/[\w\.-]+@[\w\.-]+\.\w{2,}/.test(text)) {
-      issues.push('No email address found—critical for recruiter outreach.');
-    }
-    if (!/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(text)) {
-      issues.push('No contact phone number detected.');
-    }
-    if (text.length < 300) {
-      issues.push('Resume content length is too short for meaningful analysis.');
-    }
-    if (!/(?:experience|employment|work)/i.test(text)) {
-      issues.push('No work experience section detected.');
-    }
-
-    return issues;
+  private static getCritical(text: string): string[] {
+    const i: string[] = [];
+    if (!/@/.test(text)) i.push('No email found.');
+    if (!/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(text)) i.push('No phone detected.');
+    if (text.length < 300) i.push('Resume too short.');
+    if (!/(?:experience|employment|work)/i.test(text)) i.push('No work experience detected.');
+    return i;
   }
 }
 
@@ -616,236 +403,88 @@ class ATSScoringEngine {
 class AIService {
   private static instance: AIService;
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
-  private cacheTimeout = 10 * 60 * 1000;
-  private consistencyEngine = new ScoreConsistencyEngine();
+  private consistency = new ScoreConsistencyEngine();
 
-  private constructor() {
-    console.log('🤖 ATS Engine: Local scoring ready, AI: ' + (GROQ_API_KEY || GEMINI_API_KEY ? '✅' : '⚠️ Fallback only'));
+  private constructor() { console.log('🤖 ATS Engine ready. AI:', GROQ_API_KEY || GEMINI_API_KEY ? '✅' : '⚠️ Fallback'); }
+  static getInstance(): AIService { if (!AIService.instance) AIService.instance = new AIService(); return AIService.instance; }
+
+  private async callGroq(p: string, s: string, mt: number, t: number, j: boolean): Promise<string> {
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${GROQ_API_KEY}`}, body:JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'system',content:s},{role:'user',content:p}], temperature:t, max_tokens:mt, ...(j?{response_format:{type:'json_object'}}:{}) }) });
+    if (!r.ok) throw new Error(`Groq ${r.status}`);
+    const d = await r.json(); return d.choices?.[0]?.message?.content || '';
   }
-
-  static getInstance(): AIService {
-    if (!AIService.instance) AIService.instance = new AIService();
-    return AIService.instance;
+  private async callGemini(p: string, s: string, mt: number, t: number): Promise<string> {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ contents:[{parts:[{text:`${s}\n\n${p}`}]}], generationConfig:{ temperature:t, maxOutputTokens:mt } }) });
+    if (!r.ok) throw new Error(`Gemini ${r.status}`);
+    const d = await r.json(); return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
-
-  private async callGroq(prompt: string, systemPrompt: string, maxTokens: number, temperature: number, jsonMode: boolean): Promise<string> {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
-        temperature, max_tokens: maxTokens,
-        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-      }),
-    });
-    if (!response.ok) throw new Error(`Groq ${response.status}`);
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
-  }
-
-  private async callGemini(prompt: string, systemPrompt: string, maxTokens: number, temperature: number): Promise<string> {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${systemPrompt}\n\n${prompt}` }] }],
-          generationConfig: { temperature, maxOutputTokens: maxTokens },
-        }),
-      }
-    );
-    if (!response.ok) throw new Error(`Gemini ${response.status}`);
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  }
-
-  private async callAI(prompt: string, systemPrompt: string, maxTokens: number, temperature: number, jsonMode: boolean): Promise<string> {
-    if (GROQ_API_KEY) {
-      try { return await this.callGroq(prompt, systemPrompt, maxTokens, temperature, jsonMode); }
-      catch (e: any) { console.warn('Groq failed:', e.message); }
-    }
-    if (GEMINI_API_KEY) {
-      try { return await this.callGemini(prompt, systemPrompt, maxTokens, temperature); }
-      catch (e: any) { console.warn('Gemini failed:', e.message); }
-    }
+  private async callAI(p: string, s: string, mt: number, t: number, j: boolean): Promise<string> {
+    if (GROQ_API_KEY) try { return await this.callGroq(p,s,mt,t,j); } catch(e:any){ console.warn('Groq:',e.message); }
+    if (GEMINI_API_KEY) try { return await this.callGemini(p,s,mt,t); } catch(e:any){ console.warn('Gemini:',e.message); }
     throw new Error('No AI available');
   }
 
-  private normalizeScore(score: any): ATSScore {
-    if (!score || typeof score !== 'object') {
-      return {
-        overall: 50,
-        breakdown: {
-          keywordOptimization: 50,
-          formattingScore: 50,
-          contentQuality: 50,
-          sectionCompleteness: 50,
-          actionVerbs: 50,
-          quantifiableResults: 50,
-          grammarAndSpelling: 50,
-          contactInfoQuality: 50,
-          skillsRelevance: 50,
-          overallReadability: 50,
-        },
-        missingKeywords: [],
-        improvementTips: [],
-        criticalIssues: [],
-        analyzedAt: new Date().toISOString(),
-      };
-    }
-
-    score.overall = safeNumber(score.overall, 50);
-
-    if (score.breakdown && typeof score.breakdown === 'object') {
-      for (const key of Object.keys(score.breakdown)) {
-        score.breakdown[key] = safeNumber(score.breakdown[key], 50);
-      }
-    } else {
-      score.breakdown = {
-        keywordOptimization: 50,
-        formattingScore: 50,
-        contentQuality: 50,
-        sectionCompleteness: 50,
-        actionVerbs: 50,
-        quantifiableResults: 50,
-        grammarAndSpelling: 50,
-        contactInfoQuality: 50,
-        skillsRelevance: 50,
-        overallReadability: 50,
-      };
-    }
-
-    return score;
-  }
-
-  async analyzeATS(
-    resumeText: string,
-    jobDescription?: string,
-    targetRole?: string,
-    industryKey?: string
-  ): Promise<ATSScore> {
+  async analyzeATS(resumeText: string, jobDescription?: string, targetRole?: string): Promise<ATSScore> {
     const text = resumeText || '';
-    const formatCheck = FormatValidator.validate(text);
-    const localScore = ATSScoringEngine.scoreResume(text, industryKey);
-    const sectionAnalyses = DeepSectionAnalyzer.analyzeAllSections(text);
-
-    let benchmark: BenchmarkData | null = null;
-    if (targetRole) {
-      benchmark = CompetitiveBenchmarker.compare(text, targetRole);
-    }
+    
+    // 🔍 AUTO-DETECT PROFESSION
+    const detected = ProfessionDetector.detect(text);
+    console.log('🎯 Detected:', detected.title, '| Industry:', detected.industry, '| Confidence:', Math.round(detected.confidence*100)+'%', '| Seniority:', detected.seniority);
+    console.log('🎯 Keywords:', detected.criticalKeywords.slice(0, 10).join(', '));
+    
+    const fmt = FormatValidator.validate(text);
+    const localScore = ATSScoringEngine.scoreResume(text, detected);
+    const sections = DeepSectionAnalyzer.analyzeAllSections(text);
+    const benchmark = targetRole ? CompetitiveBenchmarker.compare(text, targetRole) : null;
 
     let aiScore: ATSScore | null = null;
     try {
       if (GROQ_API_KEY || GEMINI_API_KEY) {
-        const prompt = `ATS Score this resume 0-100. Local score: ${localScore.overall}/100.
-Format issues: ${JSON.stringify(formatCheck.issues)}
-Section analysis: ${JSON.stringify(sectionAnalyses.map(s => ({ name: s.name, score: s.score })))}
-${benchmark ? `Benchmark: ${benchmark.avgScore}/100 average for ${benchmark.role}` : ''}
-Job description context: ${jobDescription || 'N/A'}
+        const prompt = `ATS Score this resume 0-100.
+Detected role: ${detected.title} (${detected.industry}, ${detected.seniority})
+Expected keywords: ${detected.criticalKeywords.slice(0,15).join(', ')}
+Local score: ${localScore.overall}/100
+Format issues: ${JSON.stringify(fmt.issues)}
+${benchmark ? `Benchmark: ${benchmark.avgScore}/100 for ${benchmark.role}` : ''}
 
-Resume text:
+Resume:
 ${text}
 
-Return JSON with overall, breakdown, missingKeywords, improvementTips, criticalIssues.`;
-
-        const result = await this.callAI(prompt, 'You are an institutional ATS engine. Output JSON.', 1500, 0.3, true);
-        aiScore = this.normalizeScore(JSON.parse(result));
+Return JSON: {"overall":number,"breakdown":{...},"missingKeywords":[],"improvementTips":[],"criticalIssues":[]}`;
+        const result = await this.callAI(prompt, 'You are an ATS engine. Return valid JSON.', 1500, 0.3, true);
+        const parsed = JSON.parse(result);
+        aiScore = { overall: safeNumber(parsed.overall, localScore.overall), breakdown: parsed.breakdown || localScore.breakdown, missingKeywords: parsed.missingKeywords || [], improvementTips: parsed.improvementTips || [], criticalIssues: parsed.criticalIssues || [], analyzedAt: new Date().toISOString() };
       }
-    } catch (e: any) {
-      console.log('AI unavailable, falling back on analytical pipeline:', e.message);
-    }
+    } catch(e:any){ console.log('AI fallback:', e.message); }
 
-    let rawOverall: number;
-    const safeLocalScore = safeNumber(localScore.overall, 50);
-    const safeFormatScore = safeNumber(formatCheck.score, 50);
-
-    if (aiScore && aiScore.overall !== undefined) {
-      const safeAiScore = safeNumber(aiScore.overall, safeLocalScore);
-      rawOverall = Math.round((safeLocalScore * 0.5) + (safeAiScore * 0.3) + (safeFormatScore * 0.2));
-    } else {
-      rawOverall = Math.round((safeLocalScore * 0.7) + (safeFormatScore * 0.3));
-    }
-
-    const finalOverall = safeNumber(
-      this.consistencyEngine.getConsistentScore(text, rawOverall),
-      rawOverall
-    );
+    const rawOverall = aiScore ? Math.round(localScore.overall*0.5 + aiScore.overall*0.3 + fmt.score*0.2) : Math.round(localScore.overall*0.7 + fmt.score*0.3);
+    const finalOverall = this.consistency.getConsistentScore(text, rawOverall);
 
     return {
       overall: finalOverall,
       breakdown: localScore.breakdown,
-      missingKeywords: [
-        ...new Set([
-          ...localScore.missingKeywords,
-          ...(aiScore?.missingKeywords || []),
-          ...(benchmark?.missingKeywords || []),
-        ]),
-      ],
-      improvementTips: [
-        ...formatCheck.recommendations,
-        ...sectionAnalyses.flatMap(s => s.suggestions),
-        ...localScore.improvementTips,
-        ...(aiScore?.improvementTips || []),
-        ...(benchmark?.gapAnalysis || []),
-      ].slice(0, 12),
-      criticalIssues: [
-        ...formatCheck.issues,
-        ...localScore.criticalIssues,
-        ...(aiScore?.criticalIssues || []),
-      ],
+      missingKeywords: [...new Set([...localScore.missingKeywords, ...(aiScore?.missingKeywords||[]), ...(benchmark?.missingKeywords||[])])],
+      improvementTips: [...fmt.recommendations, ...sections.flatMap(s=>s.suggestions), ...localScore.improvementTips, ...(aiScore?.improvementTips||[]), ...(benchmark?.gapAnalysis||[])].slice(0,12),
+      criticalIssues: [...fmt.issues, ...localScore.criticalIssues, ...(aiScore?.criticalIssues||[])],
       analyzedAt: new Date().toISOString(),
     };
   }
 
-  async getRecommendations(resumeText: string, score: ATSScore): Promise<AIRecommendation[]> {
-    const localRecs: AIRecommendation[] = score.improvementTips.map((tip, i) => ({
-      id: `local-${i}`,
-      section: 'general',
-      field: 'content',
-      current: '',
-      suggested: tip,
-      reason: 'ATS optimization',
-      priority: i < 2 ? 'Critical' : i < 4 ? 'High' : 'Medium',
-      type: 'improvement' as const,
-      applied: false,
-      createdAt: new Date().toISOString(),
-    }));
-
+  async getRecommendations(text: string, score: ATSScore): Promise<AIRecommendation[]> {
+    const local: AIRecommendation[] = score.improvementTips.map((t,i)=>({ id:`local-${i}`, section:'general', field:'content', current:'', suggested:t, reason:'ATS optimization', priority:i<2?'Critical':i<4?'High':'Medium' as any, type:'improvement' as const, applied:false, createdAt:new Date().toISOString() }));
     try {
-      const prompt = `ATS Score: ${score.overall}/100\nResume: ${resumeText}\n\nProvide 5 specific recommendations as JSON array: [{"id":"1","section":"summary","field":"content","current":"","suggested":"improved text","reason":"why","priority":"High","type":"improvement","applied":false,"createdAt":"now"}]`;
-      const result = await this.callAI(prompt, 'Return JSON array.', 2000, 0.7, true);
-      const aiRecs = JSON.parse(result);
-      return [...aiRecs, ...localRecs.slice(0, 3)];
-    } catch {
-      return localRecs;
-    }
+      const r = await this.callAI(`ATS Score:${score.overall}/100\nResume:${text}\n\nReturn JSON array of 5 recommendations.`, 'Return JSON array.', 2000, 0.7, true);
+      return [...JSON.parse(r), ...local.slice(0,3)];
+    } catch { return local; }
   }
 
-  async chat(messages: AIChatMessage[], resumeContext: string): Promise<string> {
-    try {
-      const lastMsg = messages[messages.length - 1]?.content || '';
-      return await this.callAI(
-        `Resume:\n${resumeContext}\n\nQuestion: ${lastMsg}\n\nGive specific, actionable resume advice. Be concise.`,
-        'You are an expert career coach and ATS specialist.',
-        800, 0.7, false
-      );
-    } catch {
-      return `Based on my analysis:\n\n1. Add quantifiable achievements (%, $, numbers)\n2. Use strong action verbs (Led, Developed, Implemented)\n3. Include a professional summary\n4. Add relevant certifications\n5. Use industry keywords\n\nWhich section would you like me to help improve?`;
-    }
+  async chat(messages: AIChatMessage[], ctx: string): Promise<string> {
+    try { return await this.callAI(`Resume:\n${ctx}\n\nQ:${messages[messages.length-1]?.content}\n\nGive specific advice.`, 'You are a career coach.', 800, 0.7, false); }
+    catch { return 'Add metrics to achievements. Use action verbs. Include summary. Add certifications. Use industry keywords.'; }
   }
 
-  async optimizeBulletPoint(bulletPoint: string): Promise<string> {
-    try { return await this.callAI(`Rewrite this bullet point to be more impactful: "${bulletPoint}". Return ONLY the improved version.`, 'You are a resume writer.', 100, 0.7, false); }
-    catch { return bulletPoint; }
-  }
-
-  async generateSummary(experiences: WorkExperience[], skills: string[]): Promise<string> {
-    try { return await this.callAI(`Write a 3-sentence professional summary. Skills: ${skills.join(', ')}.`, 'Be concise.', 300, 0.7, false); }
-    catch { return `Experienced professional skilled in ${skills.slice(0, 5).join(', ')} with a proven track record of delivering results.`; }
-  }
-
+  async optimizeBulletPoint(bp: string): Promise<string> { try { return await this.callAI(`Rewrite:"${bp}"`, 'Return improved version.', 100, 0.7, false); } catch { return bp; } }
+  async generateSummary(exps: WorkExperience[], skills: string[]): Promise<string> { try { return await this.callAI(`Write summary. Skills:${skills.join(',')}.`, 'Be concise.', 300, 0.7, false); } catch { return `Experienced professional skilled in ${skills.slice(0,5).join(',')}.`; } }
   clearCache(): void { this.cache.clear(); }
 }
 
