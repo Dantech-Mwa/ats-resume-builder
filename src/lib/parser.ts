@@ -9,7 +9,7 @@
 
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
-import { ResumeSections, ContactInfo, WorkExperience, Education, Skill } from '..lib/types';
+import { ResumeSections, ContactInfo, WorkExperience, Education, Skill } from '../lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
 // ============================================
