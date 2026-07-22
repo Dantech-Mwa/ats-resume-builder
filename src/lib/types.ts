@@ -156,6 +156,10 @@ export interface SkillsSection {
   languages: Skill[];
   tools: Skill[];
   other: Skill[];
+  // NEW: Fields used by parser.ts
+  frameworks?: Skill[];
+  databases?: Skill[];
+  cloudPlatforms?: Skill[];
 }
 
 export interface Certification {
