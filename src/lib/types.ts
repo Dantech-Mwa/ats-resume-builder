@@ -361,8 +361,9 @@ export interface ResumeData {
   sections: ResumeSections;
   atsScore: ATSScore | null;
   aiRecommendations: AIRecommendation[];
+  // NEW: For storing original text for learning
+  rawText?: string;
 }
-
 // -------------------------------------------
 // ATS SCORING TYPES
 // -------------------------------------------
