@@ -70,6 +70,11 @@ export interface ProfessionalSummary {
   content: string;
   aiOptimized: boolean;
   lastModified: string;
+  // NEW: Optional fields
+  versions?: any[];  // Or use SummaryVersion[] if you define it
+  keywordDensity?: Record<string, number>;
+  characterCount?: number;
+  wordCount?: number;
 }
 
 export interface WorkExperience {
