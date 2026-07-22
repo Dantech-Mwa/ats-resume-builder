@@ -148,6 +148,8 @@ export interface Skill {
   level: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
   category: string;
   yearsOfExperience?: number;
+  // NEW: Field used by parser.ts
+  selfRated?: number;
 }
 
 export interface SkillsSection {
