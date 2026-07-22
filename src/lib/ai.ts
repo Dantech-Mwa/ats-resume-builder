@@ -1,7 +1,9 @@
+// src/lib/ai.ts
 // ============================================
-// WORLD-CLASS ATS SCORING ENGINE
+// WORLD-CLASS ATS SCORING ENGINE WITH ML INTEGRATION
 // Auto-detects profession, industry, seniority
 // Scores dynamically based on detected role
+// Enhanced with ML parser for intelligent analysis
 // ============================================
 
 import {
@@ -10,6 +12,9 @@ import {
   WorkExperience,
   AIChatMessage,
 } from '../lib/types';
+import { ResumeSections } from '../lib/types';
+import ResumeParser from './parser';
+import { MLResumeParser, TrainingExample, ParsingSuggestion } from './ml/MLResumeParser';
 
 const GROQ_API_KEY = process.env.REACT_APP_GROQ_API_KEY || '';
 const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY || '';
@@ -22,6 +27,12 @@ function safeNumber(val: any, fallback = 50): number {
   const num = Number(val);
   if (!Number.isFinite(num) || Number.isNaN(num)) return fallback;
   return Math.min(100, Math.max(0, Math.round(num)));
+}
+
+function safeString(val: any, fallback: string = ''): string {
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return val.toString();
+  return fallback;
 }
 
 // ============================================
@@ -397,27 +408,148 @@ class ATSScoringEngine {
 }
 
 // ============================================
-// AI SERVICE MAIN
+// ML-ENHANCED ATS ANALYSIS
+// ============================================
+
+export interface MLEnhancedAnalysis {
+  parsedSections: Partial<ResumeSections>;
+  detectedProfession: DetectedProfession;
+  atsScore: ATSScore;
+  confidence: number;
+  suggestions: ParsingSuggestion[];
+  templateType: string;
+  requiresReview: boolean;
+}
+
+// ============================================
+// AI SERVICE MAIN WITH ML INTEGRATION
 // ============================================
 
 class AIService {
   private static instance: AIService;
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
   private consistency = new ScoreConsistencyEngine();
+  private parser: ResumeParser;
+  private mlParser: MLResumeParser;
 
-  private constructor() { console.log('🤖 ATS Engine ready. AI:', GROQ_API_KEY || GEMINI_API_KEY ? '✅' : '⚠️ Fallback'); }
-  static getInstance(): AIService { if (!AIService.instance) AIService.instance = new AIService(); return AIService.instance; }
+  private constructor() {
+    console.log('🤖 ATS Engine ready. AI:', GROQ_API_KEY || GEMINI_API_KEY ? '✅' : '⚠️ Fallback');
+    this.parser = ResumeParser.getInstance();
+    this.mlParser = new MLResumeParser();
+    this.initializeML();
+  }
+
+  private async initializeML(): Promise<void> {
+    try {
+      await this.mlParser.initialize();
+      console.log('🤖 ML Resume Parser initialized');
+    } catch (error) {
+      console.warn('⚠️ ML initialization failed:', error);
+    }
+  }
+
+  static getInstance(): AIService {
+    if (!AIService.instance) {
+      AIService.instance = new AIService();
+    }
+    return AIService.instance;
+  }
+
+  // ============================================
+  // ML-ENHANCED PARSE & ANALYZE
+  // ============================================
+
+  async parseAndAnalyzeResume(
+    file: File,
+    jobDescription?: string,
+    targetRole?: string
+  ): Promise<{
+    parseResult: any;
+    atsScore: ATSScore;
+    detectedProfession: DetectedProfession;
+    mlSuggestions: ParsingSuggestion[];
+    confidence: number;
+  }> {
+    // 1. Parse the resume with ML
+    const parseResult = await this.parser.parseFile(file);
+    
+    if (!parseResult.success) {
+      throw new Error(`Parsing failed: ${parseResult.errors.join(', ')}`);
+    }
+
+    // 2. Detect profession
+    const detected = ProfessionDetector.detect(parseResult.rawText);
+    console.log('🎯 Detected:', detected.title, '| Industry:', detected.industry, '| Confidence:', Math.round(detected.confidence*100)+'%');
+
+    // 3. Score with ATS engine
+    const atsScore = await this.analyzeATS(
+      parseResult.rawText,
+      jobDescription,
+      targetRole || detected.title
+    );
+
+    // 4. Enhance with ML suggestions
+    const mlSuggestions = parseResult.suggestions || [];
+
+    // 5. Calculate overall confidence
+    const confidence = this.calculateOverallConfidence(
+      parseResult.confidence || 0.5,
+      detected.confidence,
+      atsScore.overall / 100
+    );
+
+    return {
+      parseResult,
+      atsScore,
+      detectedProfession: detected,
+      mlSuggestions,
+      confidence
+    };
+  }
+
+  private calculateOverallConfidence(
+    parseConfidence: number,
+    detectionConfidence: number,
+    scoreConfidence: number
+  ): number {
+    return (parseConfidence * 0.4 + detectionConfidence * 0.3 + scoreConfidence * 0.3);
+  }
+
+  // ============================================
+  // AI-POWERED ATS ANALYSIS
+  // ============================================
 
   private async callGroq(p: string, s: string, mt: number, t: number, j: boolean): Promise<string> {
-    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${GROQ_API_KEY}`}, body:JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'system',content:s},{role:'user',content:p}], temperature:t, max_tokens:mt, ...(j?{response_format:{type:'json_object'}}:{}) }) });
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { 
+      method:'POST', 
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${GROQ_API_KEY}`}, 
+      body:JSON.stringify({ 
+        model:'llama-3.3-70b-versatile', 
+        messages:[{role:'system',content:s},{role:'user',content:p}], 
+        temperature:t, 
+        max_tokens:mt, 
+        ...(j?{response_format:{type:'json_object'}}:{}) 
+      }) 
+    });
     if (!r.ok) throw new Error(`Groq ${r.status}`);
-    const d = await r.json(); return d.choices?.[0]?.message?.content || '';
+    const d = await r.json(); 
+    return d.choices?.[0]?.message?.content || '';
   }
+
   private async callGemini(p: string, s: string, mt: number, t: number): Promise<string> {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ contents:[{parts:[{text:`${s}\n\n${p}`}]}], generationConfig:{ temperature:t, maxOutputTokens:mt } }) });
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, { 
+      method:'POST', 
+      headers:{'Content-Type':'application/json'}, 
+      body:JSON.stringify({ 
+        contents:[{parts:[{text:`${s}\n\n${p}`}]}], 
+        generationConfig:{ temperature:t, maxOutputTokens:mt } 
+      }) 
+    });
     if (!r.ok) throw new Error(`Gemini ${r.status}`);
-    const d = await r.json(); return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const d = await r.json(); 
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
+
   private async callAI(p: string, s: string, mt: number, t: number, j: boolean): Promise<string> {
     if (GROQ_API_KEY) try { return await this.callGroq(p,s,mt,t,j); } catch(e:any){ console.warn('Groq:',e.message); }
     if (GEMINI_API_KEY) try { return await this.callGemini(p,s,mt,t); } catch(e:any){ console.warn('Gemini:',e.message); }
@@ -453,7 +585,14 @@ ${text}
 Return JSON: {"overall":number,"breakdown":{...},"missingKeywords":[],"improvementTips":[],"criticalIssues":[]}`;
         const result = await this.callAI(prompt, 'You are an ATS engine. Return valid JSON.', 1500, 0.3, true);
         const parsed = JSON.parse(result);
-        aiScore = { overall: safeNumber(parsed.overall, localScore.overall), breakdown: parsed.breakdown || localScore.breakdown, missingKeywords: parsed.missingKeywords || [], improvementTips: parsed.improvementTips || [], criticalIssues: parsed.criticalIssues || [], analyzedAt: new Date().toISOString() };
+        aiScore = { 
+          overall: safeNumber(parsed.overall, localScore.overall), 
+          breakdown: parsed.breakdown || localScore.breakdown, 
+          missingKeywords: parsed.missingKeywords || [], 
+          improvementTips: parsed.improvementTips || [], 
+          criticalIssues: parsed.criticalIssues || [], 
+          analyzedAt: new Date().toISOString() 
+        };
       }
     } catch(e:any){ console.log('AI fallback:', e.message); }
 
@@ -470,22 +609,196 @@ Return JSON: {"overall":number,"breakdown":{...},"missingKeywords":[],"improveme
     };
   }
 
+  // ============================================
+  // ML-ENHANCED RECOMMENDATIONS
+  // ============================================
+
   async getRecommendations(text: string, score: ATSScore): Promise<AIRecommendation[]> {
-    const local: AIRecommendation[] = score.improvementTips.map((t,i)=>({ id:`local-${i}`, section:'general', field:'content', current:'', suggested:t, reason:'ATS optimization', priority:i<2?'Critical':i<4?'High':'Medium' as any, type:'improvement' as const, applied:false, createdAt:new Date().toISOString() }));
+    const local: AIRecommendation[] = score.improvementTips.map((t,i)=>({ 
+      id:`local-${i}`, 
+      section:'general', 
+      field:'content', 
+      current:'', 
+      suggested:t, 
+      reason:'ATS optimization', 
+      priority:i<2?'Critical':i<4?'High':'Medium' as any, 
+      type:'improvement' as const, 
+      applied:false, 
+      createdAt:new Date().toISOString() 
+    }));
+
+    // Get ML-based suggestions
+    let mlSuggestions: ParsingSuggestion[] = [];
     try {
-      const r = await this.callAI(`ATS Score:${score.overall}/100\nResume:${text}\n\nReturn JSON array of 5 recommendations.`, 'Return JSON array.', 2000, 0.7, true);
-      return [...JSON.parse(r), ...local.slice(0,3)];
-    } catch { return local; }
+      const mlResult = await this.parser.parseFile(new File([text], 'resume.txt', { type: 'text/plain' }));
+      if (mlResult.suggestions) {
+        mlSuggestions = mlResult.suggestions;
+      }
+    } catch (e) { /* fallback */ }
+
+    // Merge ML suggestions with AI recommendations
+    const mlRecs: AIRecommendation[] = mlSuggestions.map((s, i) => ({
+      id: `ml-${i}`,
+      section: s.field.split('.')[0] || 'general',
+      field: s.field,
+      current: '',
+      suggested: typeof s.value === 'string' ? s.value : JSON.stringify(s.value),
+      reason: `ML confidence: ${(s.confidence * 100).toFixed(0)}%`,
+      priority: s.confidence > 0.7 ? 'High' : s.confidence > 0.4 ? 'Medium' : 'Low' as any,
+      type: 'improvement' as const,
+      applied: false,
+      createdAt: new Date().toISOString()
+    }));
+
+    try {
+      const r = await this.callAI(
+        `ATS Score:${score.overall}/100\nResume:${text}\n\nReturn JSON array of 5 recommendations.`, 
+        'You are an ATS expert. Return JSON array.', 
+        2000, 0.7, true
+      );
+      const aiRecs = JSON.parse(r);
+      // Combine all recommendations, prioritizing ML suggestions for low-confidence fields
+      const allRecs = [...mlRecs, ...aiRecs, ...local.slice(0, 3)];
+      // Deduplicate
+      const seen = new Set();
+      return allRecs.filter(r => {
+        const key = r.suggested.slice(0, 50);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 10);
+    } catch { 
+      return [...mlRecs, ...local.slice(0, 3)].slice(0, 10);
+    }
   }
+
+  // ============================================
+  // ML-ENHANCED CHAT
+  // ============================================
 
   async chat(messages: AIChatMessage[], ctx: string): Promise<string> {
-    try { return await this.callAI(`Resume:\n${ctx}\n\nQ:${messages[messages.length-1]?.content}\n\nGive specific advice.`, 'You are a career coach.', 800, 0.7, false); }
-    catch { return 'Add metrics to achievements. Use action verbs. Include summary. Add certifications. Use industry keywords.'; }
+    // Check if context has parse data
+    let contextWithML = ctx;
+    try {
+      const parseResult = await this.parser.parseFile(new File([ctx], 'context.txt', { type: 'text/plain' }));
+      if (parseResult.success && parseResult.confidence) {
+        contextWithML = `${ctx}\n\nParsed with ${Math.round((parseResult.confidence || 0) * 100)}% confidence. Missing: ${parseResult.warnings.join(', ')}`;
+      }
+    } catch (e) { /* fallback to original context */ }
+
+    try { 
+      return await this.callAI(
+        `Resume:\n${contextWithML}\n\nQ:${messages[messages.length-1]?.content}\n\nGive specific, actionable advice with metrics.`, 
+        'You are a career coach and ATS expert.', 
+        800, 0.7, false
+      ); 
+    } catch { 
+      return 'Add metrics to achievements. Use action verbs. Include a professional summary. Add certifications. Use industry keywords. Quantify your impact.';
+    }
   }
 
-  async optimizeBulletPoint(bp: string): Promise<string> { try { return await this.callAI(`Rewrite:"${bp}"`, 'Return improved version.', 100, 0.7, false); } catch { return bp; } }
-  async generateSummary(exps: WorkExperience[], skills: string[]): Promise<string> { try { return await this.callAI(`Write summary. Skills:${skills.join(',')}.`, 'Be concise.', 300, 0.7, false); } catch { return `Experienced professional skilled in ${skills.slice(0,5).join(',')}.`; } }
-  clearCache(): void { this.cache.clear(); }
+  // ============================================
+  // ML-ENHANCED BULLET POINT OPTIMIZATION
+  // ============================================
+
+  async optimizeBulletPoint(bp: string): Promise<string> { 
+    try { 
+      return await this.callAI(`Rewrite this bullet point to be more impactful and quantifiable: "${bp}"`, 'Return only the improved version, no explanation.', 100, 0.7, false); 
+    } catch { 
+      return bp; 
+    } 
+  }
+
+  // ============================================
+  // ML-ENHANCED SUMMARY GENERATION
+  // ============================================
+
+  async generateSummary(exps: WorkExperience[], skills: string[]): Promise<string> { 
+    try { 
+      const expSummary = exps.slice(0, 3).map(e => `${e.position} at ${e.company}`).join(', ');
+      return await this.callAI(
+        `Generate a professional summary for someone with experience: ${expSummary}. Skills: ${skills.slice(0, 10).join(', ')}.`, 
+        'Return a concise, impactful 2-3 sentence summary.', 
+        300, 0.7, false
+      ); 
+    } catch { 
+      return `Experienced professional skilled in ${skills.slice(0, 5).join(', ')}. Proven track record of delivering results.`; 
+    } 
+  }
+
+  // ============================================
+  // LEARNING FROM CORRECTIONS
+  // ============================================
+
+  async learnFromCorrection(
+    originalText: string,
+    originalParsed: Partial<ResumeSections>,
+    corrected: Partial<ResumeSections>,
+    templateType: string = 'unknown'
+  ): Promise<void> {
+    try {
+      await this.parser.learnFromCorrection(
+        originalText,
+        originalParsed,
+        corrected,
+        templateType
+      );
+      console.log('📚 Learned from correction');
+    } catch (error) {
+      console.warn('Failed to learn from correction:', error);
+    }
+  }
+
+  // ============================================
+  // BATCH LEARNING
+  // ============================================
+
+  async batchLearnFromCorrections(corrections: TrainingExample[]): Promise<void> {
+    try {
+      await this.parser.batchLearnFromCorrections(corrections);
+      console.log(`📚 Batch learned from ${corrections.length} corrections`);
+    } catch (error) {
+      console.warn('Batch learning failed:', error);
+    }
+  }
+
+  // ============================================
+  // PARSER STATISTICS
+  // ============================================
+
+  getParserStats(): any {
+    return this.parser.getParserStats();
+  }
+
+  // ============================================
+  // EXPORT/IMPORT TRAINING DATA
+  // ============================================
+
+  exportTrainingData(): string {
+    return this.parser.exportTrainingData();
+  }
+
+  importTrainingData(jsonData: string): boolean {
+    return this.parser.importTrainingData(jsonData);
+  }
+
+  // ============================================
+  // CACHE MANAGEMENT
+  // ============================================
+
+  clearCache(): void { 
+    this.cache.clear(); 
+    this.parser.clearCache();
+  }
+
+  getCacheStats(): { aiCacheSize: number; parserCacheSize: number } {
+    const parserStats = this.parser.getCacheStats();
+    return {
+      aiCacheSize: this.cache.size,
+      parserCacheSize: parserStats.parseCacheSize
+    };
+  }
 }
 
+// Export singleton instance
 export default AIService;
