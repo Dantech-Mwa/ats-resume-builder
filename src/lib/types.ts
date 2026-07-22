@@ -1,4 +1,4 @@
-// ============================================
+/ ============================================
 // ATS RESUME BUILDER - COMPLETE TYPE SYSTEM
 // ============================================
 
@@ -20,10 +20,6 @@ export interface Subscription {
   currency: string;
   autoRenew: boolean;
   paymentId?: string;
-  // NEW: For ML parser learning
-  trialUsed?: boolean;
-  // NEW: For tracking features
-  features?: string[];
 }
 
 export interface User {
@@ -55,7 +51,7 @@ export interface AuthState {
 }
 
 // -------------------------------------------
-// RESUME TYPES - Enhanced for ML Parser
+// RESUME TYPES
 // -------------------------------------------
 
 export interface ContactInfo {
@@ -68,24 +64,12 @@ export interface ContactInfo {
   portfolio?: string;
   github?: string;
   twitter?: string;
-  // NEW: For better contact parsing
-  website?: string;
 }
 
 export interface ProfessionalSummary {
   content: string;
   aiOptimized: boolean;
   lastModified: string;
-  // NEW: For ML parser version tracking
-  versions?: SummaryVersion[];
-}
-
-export interface SummaryVersion {
-  id: string;
-  content: string;
-  timestamp: string;
-  source: 'user' | 'ai' | 'template';
-  atsScore?: number;
 }
 
 export interface WorkExperience {
@@ -100,9 +84,6 @@ export interface WorkExperience {
   achievements: string[];
   technologies: string[];
   aiSuggestions: string[];
-  // NEW: For ML parser enhancements
-  industry?: string;
-  employmentType?: 'Full-time' | 'Part-time' | 'Contract' | 'Freelance' | 'Internship' | 'Volunteer';
 }
 
 export interface Education {
@@ -116,18 +97,13 @@ export interface Education {
   honors: string[];
   activities: string[];
   relevantCourses: string[];
-  // NEW: For ML parser enhancements
-  location?: string;
-  degreeType?: 'Associate' | 'Bachelor' | 'Master' | 'PhD' | 'Certificate' | 'Diploma' | 'High School' | 'Other';
 }
 
 export interface Skill {
   name: string;
-  level: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert' | 'Master';
+  level: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
   category: string;
   yearsOfExperience?: number;
-  // NEW: For ML parser
-  lastUsed?: string;
 }
 
 export interface SkillsSection {
@@ -136,10 +112,6 @@ export interface SkillsSection {
   languages: Skill[];
   tools: Skill[];
   other: Skill[];
-  // NEW: For ML parser categorization
-  frameworks?: Skill[];
-  databases?: Skill[];
-  cloudPlatforms?: Skill[];
 }
 
 export interface Certification {
@@ -151,8 +123,6 @@ export interface Certification {
   credentialId?: string;
   credentialUrl?: string;
   inProgress: boolean;
-  // NEW: For ML parser
-  skillsValidated?: string[];
 }
 
 export interface Project {
@@ -167,19 +137,12 @@ export interface Project {
   current: boolean;
   achievements: string[];
   role: string;
-  // NEW: For ML parser
-  teamSize?: number;
 }
 
 export interface Language {
   name: string;
   proficiency: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
   certification?: string;
-  // NEW: For detailed language parsing
-  readingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
-  writingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
-  speakingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
-  listeningLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
 }
 
 export interface Volunteer {
@@ -191,8 +154,6 @@ export interface Volunteer {
   current: boolean;
   description: string;
   achievements: string[];
-  // NEW: For ML parser
-  cause?: string[];
 }
 
 export interface Publication {
@@ -204,9 +165,6 @@ export interface Publication {
   doi?: string;
   description: string;
   coAuthors: string[];
-  // NEW: For ML parser
-  journalName?: string;
-  peerReviewed?: boolean;
 }
 
 export interface Award {
@@ -216,8 +174,6 @@ export interface Award {
   date: string;
   description: string;
   category: string;
-  // NEW: For ML parser
-  level?: 'Local' | 'Regional' | 'National' | 'International' | 'Global';
 }
 
 export interface CustomSection {
@@ -233,8 +189,6 @@ export interface CustomSectionItem {
   date: string;
   description: string;
   bulletPoints: string[];
-  // NEW: For ML parser
-  tags?: string[];
 }
 
 export interface ResumeSections {
@@ -250,54 +204,6 @@ export interface ResumeSections {
   publications: Publication[];
   awards: Award[];
   customSections: CustomSection[];
-  // NEW: For ML parser additional sections
-  professionalAffiliations?: ProfessionalAffiliation[];
-  conferences?: Conference[];
-  patents?: Patent[];
-  references?: Reference[];
-}
-
-// NEW: Types for additional sections (optional)
-export interface ProfessionalAffiliation {
-  id: string;
-  name: string;
-  role: string;
-  membershipType: string;
-  startDate: string;
-  endDate?: string;
-  current: boolean;
-}
-
-export interface Conference {
-  id: string;
-  name: string;
-  location: string;
-  date: string;
-  role: 'Attendee' | 'Speaker' | 'Organizer' | 'Panelist';
-  topic: string;
-  link?: string;
-}
-
-export interface Patent {
-  id: string;
-  title: string;
-  number: string;
-  date: string;
-  status: 'Filed' | 'Pending' | 'Granted';
-  description: string;
-  inventors: string[];
-  assignee: string;
-  link?: string;
-}
-
-export interface Reference {
-  id: string;
-  name: string;
-  position: string;
-  company: string;
-  email: string;
-  phone: string;
-  relationship: 'Manager' | 'Peer' | 'Subordinate' | 'Client' | 'Academic';
 }
 
 export interface ResumeMetadata {
@@ -313,11 +219,6 @@ export interface ResumeMetadata {
   targetRole?: string;
   targetIndustry?: string;
   completeness: number;
-  // NEW: For ML parser tracking
-  parsedWith?: 'ml' | 'rule' | 'hybrid';
-  parsedConfidence?: number;
-  templateType?: string;
-  requiresReview?: boolean;
 }
 
 export interface ResumeData {
@@ -328,7 +229,7 @@ export interface ResumeData {
 }
 
 // -------------------------------------------
-// ATS SCORING TYPES - Enhanced for better scoring
+// ATS SCORING TYPES
 // -------------------------------------------
 
 export interface ATSBreakdown {
@@ -342,10 +243,6 @@ export interface ATSBreakdown {
   contactInfoQuality: number;
   skillsRelevance: number;
   overallReadability: number;
-  // NEW: For ML-enhanced scoring
-  industrySpecificKeywords?: number;
-  roleSpecificKeywords?: number;
-  seniorityMatch?: number;
 }
 
 export interface ATSScore {
@@ -356,14 +253,10 @@ export interface ATSScore {
   criticalIssues: string[];
   analyzedAt: string;
   jobDescriptionMatch?: number;
-  // NEW: For ML-enhanced scoring
-  keywordDensity?: Record<string, number>;
-  suggestedKeywords?: string[];
-  atsParsingReadability?: number;
 }
 
 // -------------------------------------------
-// AI TYPES - Enhanced for ML parser
+// AI TYPES
 // -------------------------------------------
 
 export interface AIRecommendation {
@@ -377,9 +270,6 @@ export interface AIRecommendation {
   type: 'improvement' | 'addition' | 'removal' | 'rewrite';
   applied: boolean;
   createdAt: string;
-  // NEW: For ML parser suggestions
-  confidence?: number;
-  category?: string;
 }
 
 export interface AIAnalysis {
@@ -387,9 +277,6 @@ export interface AIAnalysis {
   recommendations: AIRecommendation[];
   enhancedContent: Partial<ResumeSections>;
   keywords: string[];
-  // NEW: For ML parser
-  suggestedKeywords?: string[];
-  semanticKeywords?: string[];
 }
 
 export interface AIChatMessage {
@@ -398,30 +285,6 @@ export interface AIChatMessage {
   content: string;
   timestamp: string;
   suggestions?: string[];
-  // NEW: For ML parser context
-  context?: Record<string, any>;
-}
-
-// NEW: For ML parser suggestions
-export interface ParsingSuggestion {
-  field: string;
-  value: any;
-  confidence: number;
-  alternativeValues?: any[];
-  reason?: string;
-  action?: 'review' | 'auto-correct' | 'ignore';
-}
-
-// NEW: For ML training data
-export interface TrainingExample {
-  id: string;
-  rawText: string;
-  sections: Partial<ResumeSections>;
-  templateType: string;
-  confidence: number;
-  corrections: Partial<ResumeSections>;
-  timestamp: string;
-  source?: 'user' | 'auto' | 'import' | 'synthetic';
 }
 
 // -------------------------------------------
@@ -484,7 +347,7 @@ export interface TemplateSectionConfig {
 }
 
 // -------------------------------------------
-// PAYMENT TYPES - Original (no changes)
+// PAYMENT TYPES
 // -------------------------------------------
 
 export interface PricingPlan {
@@ -521,7 +384,7 @@ export interface Invoice {
 }
 
 // -------------------------------------------
-// UI STATE TYPES - Original (no changes)
+// UI STATE TYPES
 // -------------------------------------------
 
 export interface UIState {
@@ -560,7 +423,7 @@ export interface Toast {
 }
 
 // -------------------------------------------
-// API TYPES - Enhanced for ML parser results
+// API TYPES
 // -------------------------------------------
 
 export interface APIResponse<T = any> {
@@ -592,15 +455,10 @@ export interface ResumeImportResult {
   errors: string[];
   warnings: string[];
   rawText: string;
-  // NEW: For ML parser results
-  confidence?: number;
-  suggestions?: ParsingSuggestion[];
-  templateType?: string;
-  requiresReview?: boolean;
 }
 
 // -------------------------------------------
-// JOB MATCHING TYPES - Original (no changes)
+// JOB MATCHING TYPES
 // -------------------------------------------
 
 export interface JobDescription {
@@ -624,7 +482,7 @@ export interface JobMatchResult {
 }
 
 // -------------------------------------------
-// ANALYTICS TYPES - Original (no changes)
+// ANALYTICS TYPES
 // -------------------------------------------
 
 export interface AnalyticsEvent {
@@ -648,7 +506,7 @@ export interface ResumeAnalytics {
 }
 
 // -------------------------------------------
-// EXPORT & IMPORT TYPES - Enhanced for ML parser
+// EXPORT & IMPORT TYPES
 // -------------------------------------------
 
 export type ExportFormat = 'pdf' | 'docx' | 'txt' | 'json';
@@ -665,7 +523,7 @@ export interface ExportConfig {
 }
 
 // -------------------------------------------
-// FORM TYPES - Original (no changes)
+// FORM TYPES
 // -------------------------------------------
 
 export interface LoginFormData {
