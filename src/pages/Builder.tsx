@@ -1,17 +1,12 @@
 // ============================================
-// BUILDER PAGE - Complete with Debug Logs & Fixed
+// BUILDER PAGE - Perfect Auto-Populate
 // ============================================
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  MdSave,
-  MdDownload,
-  MdPictureAsPdf,
-  MdDescription,
-  MdTextSnippet,
-  MdAutoAwesome,
-  MdCloudUpload,
+  MdSave, MdDownload, MdPictureAsPdf, MdDescription,
+  MdTextSnippet, MdAutoAwesome, MdCloudUpload,
 } from 'react-icons/md';
 import { useResume, useAI, useExport } from '../store';
 import ResumeEditor from '../components/ResumeEditor';
@@ -26,15 +21,7 @@ import toast from 'react-hot-toast';
 const Builder: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { 
-    currentResume, 
-    createNewResume, 
-    saveResume, 
-    isDirty,
-    updateSection,
-    addItem,
-    setCurrentResume 
-  } = useResume();
+  const { currentResume, createNewResume, saveResume, isDirty, setCurrentResume } = useResume();
   const { atsScore, setATSScore, setAIRecommendations, setAILoading, aiLoading } = useAI();
   const { setExportLoading } = useExport();
 
@@ -42,28 +29,14 @@ const Builder: React.FC = () => {
   const [showUpload, setShowUpload] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
-
   const isUpload = searchParams.get('upload') === 'true';
 
-  useEffect(() => {
-    const timer = setTimeout(() => setPageLoaded(true), 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (isUpload) {
-      setShowUpload(true);
-    }
-  }, [isUpload]);
-
-  useEffect(() => {
-    if (!currentResume && pageLoaded) {
-      createNewResume('My Resume');
-    }
-  }, [currentResume, pageLoaded, createNewResume]);
+  useEffect(() => { const t = setTimeout(() => setPageLoaded(true), 500); return () => clearTimeout(t); }, []);
+  useEffect(() => { if (isUpload) setShowUpload(true); }, [isUpload]);
+  useEffect(() => { if (!currentResume && pageLoaded) createNewResume('My Resume'); }, [currentResume, pageLoaded, createNewResume]);
 
   // ============================================
-  // FILE UPLOAD HANDLER
+  // FILE UPLOAD - PERFECT AUTO-POPULATE
   // ============================================
 
   const handleFileUpload = async (file: File) => {
@@ -80,70 +53,151 @@ const Builder: React.FC = () => {
         return;
       }
 
-      console.log('📦 ===== PARSER RESULT =====');
-      console.log('  Contact:', result.parsed.contact?.fullName, '|', result.parsed.contact?.email);
-      console.log('  Summary length:', result.parsed.summary?.content?.length || 0);
-      console.log('  Experience entries:', result.parsed.experience?.length || 0);
-      if (result.parsed.experience?.length) {
-        result.parsed.experience.forEach((exp: any, i: number) => {
-          console.log(`    [${i}] ${exp.position} | ${exp.company} | ${exp.startDate}-${exp.endDate} | Achievements: ${exp.achievements?.length || 0}`);
-        });
-      }
-      console.log('  Education entries:', result.parsed.education?.length || 0);
-      console.log('  Skills (tech):', result.parsed.skills?.technical?.length || 0);
-      console.log('  Skills (soft):', result.parsed.skills?.soft?.length || 0);
-      console.log('  Projects:', result.parsed.projects?.length || 0);
-      console.log('  Certifications:', result.parsed.certifications?.length || 0);
-      console.log('  Raw text length:', result.rawText?.length || 0);
-      console.log('  Raw text preview:', result.rawText?.substring(0, 300));
-      console.log('📦 ===== END PARSER RESULT =====');
+      const parsed = result.parsed;
 
-      toast.success('Resume parsed! Populating editor...');
+      console.log('📦 PARSED SECTIONS:');
+      console.log('  Contact:', parsed.contact?.fullName, parsed.contact?.email);
+      console.log('  Summary:', parsed.summary?.content?.substring(0, 100));
+      console.log('  Experience:', parsed.experience?.length, 'entries');
+      parsed.experience?.forEach((e: any, i: number) => console.log(`    [${i}] ${e.position} @ ${e.company} | ${e.startDate}-${e.endDate} | achievements: ${e.achievements?.length}`));
+      console.log('  Education:', parsed.education?.length, 'entries');
+      console.log('  Skills - tech:', parsed.skills?.technical?.length, 'soft:', parsed.skills?.soft?.length, 'tools:', parsed.skills?.tools?.length);
+      console.log('  Projects:', parsed.projects?.length);
+      console.log('  Certifications:', parsed.certifications?.length);
+      console.log('  Languages:', parsed.languages?.length);
 
-      // Build complete resume with parsed data
-      const parsedResume = {
+      // BUILD COMPLETE RESUME OBJECT
+      const fullResume = {
         ...currentResume!,
         sections: {
-          ...currentResume!.sections,
+          // CONTACT
           contact: {
-            ...currentResume!.sections.contact,
-            ...(result.parsed.contact || {}),
+            fullName: parsed.contact?.fullName || '',
+            email: parsed.contact?.email || '',
+            phone: parsed.contact?.phone || '',
+            location: parsed.contact?.location || '',
+            country: parsed.contact?.country || '',
+            linkedIn: parsed.contact?.linkedIn || '',
+            portfolio: parsed.contact?.portfolio || '',
+            github: parsed.contact?.github || '',
           },
-          summary: result.parsed.summary || currentResume!.sections.summary,
-          experience: result.parsed.experience?.length 
-            ? result.parsed.experience 
-            : currentResume!.sections.experience,
-          education: result.parsed.education?.length 
-            ? result.parsed.education 
-            : currentResume!.sections.education,
-          skills: result.parsed.skills 
-            ? { ...currentResume!.sections.skills, ...result.parsed.skills }
-            : currentResume!.sections.skills,
-          certifications: result.parsed.certifications?.length
-            ? result.parsed.certifications
-            : currentResume!.sections.certifications,
-          projects: result.parsed.projects?.length
-            ? result.parsed.projects
-            : currentResume!.sections.projects,
-          languages: result.parsed.languages?.length
-            ? result.parsed.languages
-            : currentResume!.sections.languages,
+          // SUMMARY
+          summary: {
+            content: parsed.summary?.content || '',
+            aiOptimized: false,
+            lastModified: new Date().toISOString(),
+          },
+          // EXPERIENCE - Direct from parser
+          experience: (parsed.experience || []).map((exp: any) => ({
+            id: exp.id || crypto.randomUUID(),
+            company: exp.company || '',
+            position: exp.position || '',
+            startDate: exp.startDate || '',
+            endDate: exp.endDate || '',
+            current: exp.current || false,
+            location: exp.location || '',
+            description: exp.description || '',
+            achievements: exp.achievements || [],
+            technologies: exp.technologies || [],
+            aiSuggestions: [],
+          })),
+          // EDUCATION - Direct from parser
+          education: (parsed.education || []).map((edu: any) => ({
+            id: edu.id || crypto.randomUUID(),
+            institution: edu.institution || '',
+            degree: edu.degree || '',
+            field: edu.field || '',
+            startDate: edu.startDate || '',
+            endDate: edu.endDate || '',
+            gpa: edu.gpa || '',
+            honors: edu.honors || [],
+            activities: edu.activities || [],
+            relevantCourses: edu.relevantCourses || [],
+          })),
+          // SKILLS - Direct from parser
+          skills: {
+            technical: (parsed.skills?.technical || []).map((s: any) => ({
+              name: s.name || s,
+              level: s.level || 'Intermediate',
+              category: s.category || 'Technical',
+            })),
+            soft: (parsed.skills?.soft || []).map((s: any) => ({
+              name: s.name || s,
+              level: s.level || 'Intermediate',
+              category: s.category || 'Soft Skills',
+            })),
+            languages: (parsed.skills?.languages || []).map((s: any) => ({
+              name: s.name || s,
+              level: s.level || 'Intermediate',
+              category: s.category || 'Language',
+            })),
+            tools: (parsed.skills?.tools || []).map((s: any) => ({
+              name: s.name || s,
+              level: s.level || 'Intermediate',
+              category: s.category || 'Tools',
+            })),
+            other: (parsed.skills?.other || []).map((s: any) => ({
+              name: s.name || s,
+              level: s.level || 'Intermediate',
+              category: s.category || 'Other',
+            })),
+          },
+          // CERTIFICATIONS
+          certifications: (parsed.certifications || []).map((cert: any) => ({
+            id: cert.id || crypto.randomUUID(),
+            name: cert.name || '',
+            issuer: cert.issuer || '',
+            date: cert.date || '',
+            expiryDate: cert.expiryDate || '',
+            credentialId: cert.credentialId || '',
+            credentialUrl: cert.credentialUrl || '',
+            inProgress: cert.inProgress || false,
+          })),
+          // PROJECTS
+          projects: (parsed.projects || []).map((proj: any) => ({
+            id: proj.id || crypto.randomUUID(),
+            name: proj.name || '',
+            description: proj.description || '',
+            technologies: proj.technologies || [],
+            url: proj.url || '',
+            githubUrl: proj.githubUrl || '',
+            startDate: proj.startDate || '',
+            endDate: proj.endDate || '',
+            current: proj.current || false,
+            achievements: proj.achievements || [],
+            role: proj.role || '',
+          })),
+          // LANGUAGES
+          languages: (parsed.languages || []).map((lang: any) => ({
+            name: lang.name || '',
+            proficiency: lang.proficiency || 'Intermediate',
+          })),
+          // Keep empty arrays for sections not parsed
+          volunteer: currentResume?.sections.volunteer || [],
+          publications: currentResume?.sections.publications || [],
+          awards: currentResume?.sections.awards || [],
+          customSections: currentResume?.sections.customSections || [],
         },
         metadata: {
           ...currentResume!.metadata,
           updatedAt: new Date().toISOString(),
+          completeness: 80,
         },
       };
 
-      // Update the entire resume at once
-      setCurrentResume(parsedResume);
+      // SET THE ENTIRE RESUME AT ONCE
+      setCurrentResume(fullResume);
+      
+      const expCount = parsed.experience?.length || 0;
+      const eduCount = parsed.education?.length || 0;
+      const skillCount = (parsed.skills?.technical?.length || 0) + (parsed.skills?.soft?.length || 0);
+      
+      toast.success(`Populated: ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
 
-      toast.success('Editor populated! Running AI analysis...');
-
-      // Score using RAW text (most accurate)
+      // Score the raw text
       await analyzeResume(result.rawText);
     } catch (error: any) {
-      toast.error('Failed to parse resume: ' + error.message);
+      toast.error('Failed: ' + error.message);
     } finally {
       setParsing(false);
     }
@@ -154,134 +208,74 @@ const Builder: React.FC = () => {
   // ============================================
 
   const analyzeResume = async (resumeText: string) => {
-    console.log('🔬 ===== TEXT SENT TO SCORER =====');
-    console.log('  Length:', resumeText?.length || 0);
-    console.log('  Has EXPERIENCE:', /experience/i.test(resumeText));
-    console.log('  Has EDUCATION:', /education/i.test(resumeText));
-    console.log('  Has SKILLS:', /skills/i.test(resumeText));
-    console.log('  Has bullets (•):', /•/.test(resumeText));
-    console.log('  Has dates (20XX):', /\b20\d{2}\b/.test(resumeText));
-    console.log('  Has metrics (%):', /\d+%/.test(resumeText));
-    console.log('  Has email (@):', /@/.test(resumeText));
-    console.log('  First 500 chars:', resumeText?.substring(0, 500));
-    console.log('🔬 ===== END TEXT SAMPLE =====');
-
     setAILoading(true);
     try {
       const aiService = AIService.getInstance();
-      
       const score = await aiService.analyzeATS(resumeText);
-      console.log('✅ SCORE RESULT:', score.overall, '/100');
-      console.log('   Breakdown:', JSON.stringify(score.breakdown));
-      
       setATSScore(score);
-
-      const recommendations = await aiService.getRecommendations(resumeText, score);
-      console.log('✅ RECOMMENDATIONS:', recommendations?.length || 0);
-      
-      setAIRecommendations(recommendations || []);
-
-      toast.success(`ATS Score: ${score.overall}/100 - ${recommendations?.length || 0} recommendations`);
+      const recs = await aiService.getRecommendations(resumeText, score);
+      setAIRecommendations(recs || []);
+      toast.success(`ATS Score: ${score.overall}/100 - ${recs?.length || 0} tips`);
     } catch (error: any) {
-      console.error('❌ AI Analysis error:', error);
+      console.error('Analysis error:', error);
     } finally {
       setAILoading(false);
     }
   };
 
   // ============================================
-  // RE-ANALYZE (from editor content)
+  // RE-ANALYZE FROM EDITOR
   // ============================================
 
   const handleReAnalyze = async () => {
     if (!currentResume) return;
+    const s = currentResume.sections;
+    let text = '';
     
-    const sections = currentResume.sections;
-    let resumeText = '';
-
-    // CONTACT
-    if (sections.contact.fullName) {
-      resumeText += `${sections.contact.fullName}\n`;
-      resumeText += `${sections.contact.email || ''} | ${sections.contact.phone || ''}\n`;
-      if (sections.contact.location) resumeText += `${sections.contact.location}\n`;
-      if (sections.contact.linkedIn) resumeText += `${sections.contact.linkedIn}\n`;
-      resumeText += '\n';
+    if (s.contact.fullName) {
+      text += `${s.contact.fullName}\n${s.contact.email} | ${s.contact.phone}\n`;
+      if (s.contact.location) text += `${s.contact.location}\n`;
+      if (s.contact.linkedIn) text += `${s.contact.linkedIn}\n`;
+      text += '\n';
     }
-
-    // SUMMARY
-    if (sections.summary?.content) {
-      resumeText += `PROFESSIONAL SUMMARY\n${sections.summary.content}\n\n`;
-    }
-
-    // EXPERIENCE
-    if (sections.experience?.length) {
-      resumeText += 'PROFESSIONAL EXPERIENCE\n\n';
-      sections.experience.forEach((exp: any) => {
-        resumeText += `${exp.position || ''} | ${exp.startDate || ''} - ${exp.current ? 'Present' : exp.endDate || ''}\n`;
-        resumeText += `${exp.company || ''}\n`;
-        if (exp.location) resumeText += `${exp.location}\n`;
-        if (exp.description) resumeText += `${exp.description}\n`;
-        if (exp.achievements?.length) {
-          exp.achievements.forEach((a: string) => {
-            if (a.trim()) resumeText += `• ${a.trim()}\n`;
-          });
-        }
-        resumeText += '\n';
+    
+    if (s.summary?.content) text += `PROFESSIONAL SUMMARY\n${s.summary.content}\n\n`;
+    
+    if (s.experience?.length) {
+      text += 'PROFESSIONAL EXPERIENCE\n\n';
+      s.experience.forEach((e: any) => {
+        text += `${e.position} | ${e.startDate} - ${e.current ? 'Present' : e.endDate}\n${e.company}\n`;
+        if (e.description) text += `${e.description}\n`;
+        e.achievements?.forEach((a: string) => { if (a.trim()) text += `• ${a}\n`; });
+        text += '\n';
       });
     }
-
-    // EDUCATION
-    if (sections.education?.length) {
-      resumeText += 'EDUCATION\n\n';
-      sections.education.forEach((edu: any) => {
-        resumeText += `${edu.degree || ''}`;
-        if (edu.field) resumeText += ` in ${edu.field}`;
-        resumeText += ` | ${edu.institution || ''}\n`;
-        if (edu.startDate) resumeText += `${edu.startDate} - ${edu.endDate || 'Present'}\n`;
-        if (edu.gpa) resumeText += `GPA: ${edu.gpa}\n`;
-        resumeText += '\n';
+    
+    if (s.education?.length) {
+      text += 'EDUCATION\n\n';
+      s.education.forEach((e: any) => {
+        text += `${e.degree}${e.field ? ' in ' + e.field : ''} | ${e.institution}\n`;
+        if (e.startDate) text += `${e.startDate} - ${e.endDate || 'Present'}\n`;
+        text += '\n';
       });
     }
-
-    // SKILLS
-    if (sections.skills) {
-      const techSkills = (sections.skills.technical || []).map((s: any) => s.name).filter(Boolean);
-      const softSkills = (sections.skills.soft || []).map((s: any) => s.name).filter(Boolean);
-      const toolSkills = (sections.skills.tools || []).map((s: any) => s.name).filter(Boolean);
-      
-      if (techSkills.length || softSkills.length || toolSkills.length) {
-        resumeText += 'SKILLS\n';
-        if (techSkills.length) resumeText += `Technical: ${techSkills.join(', ')}\n`;
-        if (softSkills.length) resumeText += `Soft Skills: ${softSkills.join(', ')}\n`;
-        if (toolSkills.length) resumeText += `Tools: ${toolSkills.join(', ')}\n`;
-        resumeText += '\n';
-      }
+    
+    if (s.skills) {
+      const all = [...(s.skills.technical||[]), ...(s.skills.soft||[]), ...(s.skills.tools||[])].map((sk: any) => sk.name || sk).filter(Boolean);
+      if (all.length) text += `SKILLS\n${all.join(', ')}\n\n`;
     }
-
-    // PROJECTS
-    if (sections.projects?.length) {
-      resumeText += 'PROJECTS\n\n';
-      sections.projects.forEach((proj: any) => {
-        resumeText += `${proj.name || ''}\n`;
-        if (proj.description) resumeText += `${proj.description}\n`;
-        if (proj.technologies?.length) resumeText += `Technologies: ${proj.technologies.join(', ')}\n`;
-        resumeText += '\n';
-      });
+    
+    if (s.projects?.length) {
+      text += 'PROJECTS\n\n';
+      s.projects.forEach((p: any) => { text += `${p.name}\n${p.description}\n\n`; });
     }
-
-    // CERTIFICATIONS
-    if (sections.certifications?.length) {
-      resumeText += 'CERTIFICATIONS\n';
-      sections.certifications.forEach((cert: any) => {
-        resumeText += `• ${cert.name || ''}`;
-        if (cert.issuer) resumeText += ` - ${cert.issuer}`;
-        resumeText += '\n';
-      });
-      resumeText += '\n';
+    
+    if (s.certifications?.length) {
+      text += 'CERTIFICATIONS\n';
+      s.certifications.forEach((c: any) => { text += `• ${c.name}${c.issuer ? ' - ' + c.issuer : ''}\n`; });
     }
-
-    console.log('🔄 RE-ANALYZE from editor - text length:', resumeText.length);
-    await analyzeResume(resumeText);
+    
+    await analyzeResume(text);
   };
 
   // ============================================
@@ -289,30 +283,19 @@ const Builder: React.FC = () => {
   // ============================================
 
   const handleExport = async (format: string) => {
-    if (!currentResume) {
-      toast.error('No resume to export');
-      return;
-    }
-
+    if (!currentResume) { toast.error('No resume'); return; }
     setExportLoading(true);
     try {
-      const generator = ResumeGenerator.getInstance();
-      await generator.downloadResume(currentResume, {
-        format: format as any,
-        templateId: currentResume.metadata.templateId,
-        includeAISuggestions: false,
-        includeATSScore: true,
-        pageSize: 'A4',
-        margins: 'normal',
-        fontSize: 'normal',
+      const gen = ResumeGenerator.getInstance();
+      await gen.downloadResume(currentResume, {
+        format: format as any, templateId: currentResume.metadata.templateId,
+        includeAISuggestions: false, includeATSScore: true,
+        pageSize: 'A4', margins: 'normal', fontSize: 'normal',
       });
-      toast.success(`Resume exported as ${format.toUpperCase()}!`);
+      toast.success(`Exported as ${format.toUpperCase()}!`);
       setShowExport(false);
-    } catch (error: any) {
-      toast.error(error.message || 'Export failed');
-    } finally {
-      setExportLoading(false);
-    }
+    } catch (e: any) { toast.error(e.message); }
+    finally { setExportLoading(false); }
   };
 
   // ============================================
@@ -320,86 +303,44 @@ const Builder: React.FC = () => {
   // ============================================
 
   if (!pageLoaded || parsing) {
-    return (
-      <Loading 
-        type="page" 
-        text={parsing ? 'Analyzing your resume and populating the editor...' : 'Loading resume builder...'} 
-        fullScreen 
-      />
-    );
+    return <Loading type="page" text={parsing ? 'Analyzing resume...' : 'Loading...'} fullScreen />;
   }
 
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col">
-      {/* Top Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-600 hover:text-gray-900">
-            ← Back
-          </button>
+          <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-600 hover:text-gray-900">← Back</button>
           <div className="w-px h-5 bg-gray-200" />
-          <h1 className="text-sm font-semibold text-gray-900">
-            {currentResume?.metadata.title || 'Untitled Resume'}
-          </h1>
-          {isDirty && <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" title="Unsaved changes" />}
+          <h1 className="text-sm font-semibold text-gray-900">{currentResume?.metadata.title || 'Untitled'}</h1>
+          {isDirty && <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" />}
           {aiLoading && <span className="text-xs text-blue-600 animate-pulse">Analyzing...</span>}
           {atsScore && (
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-              atsScore.overall >= 80 ? 'bg-green-100 text-green-700' :
-              atsScore.overall >= 60 ? 'bg-yellow-100 text-yellow-700' :
-              'bg-red-100 text-red-700'
-            }`}>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${atsScore.overall >= 80 ? 'bg-green-100 text-green-700' : atsScore.overall >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
               ATS: {atsScore.overall}/100
             </span>
           )}
         </div>
-
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowUpload(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-            <MdCloudUpload className="w-4 h-4" /> Upload
-          </button>
-          <button onClick={handleReAnalyze} disabled={aiLoading} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50">
-            <MdAutoAwesome className="w-4 h-4" /> {aiLoading ? 'Analyzing...' : 'Re-analyze'}
-          </button>
-          <button onClick={saveResume} className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isDirty ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 bg-gray-50 cursor-not-allowed'}`}>
-            <MdSave className="w-4 h-4" /> Save
-          </button>
-          <button onClick={() => setShowExport(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
-            <MdDownload className="w-4 h-4" /> Download
-          </button>
+          <button onClick={() => setShowUpload(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"><MdCloudUpload className="w-4 h-4"/> Upload</button>
+          <button onClick={handleReAnalyze} disabled={aiLoading} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg disabled:opacity-50"><MdAutoAwesome className="w-4 h-4"/> {aiLoading?'Analyzing...':'Re-analyze'}</button>
+          <button onClick={saveResume} className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg ${isDirty?'text-blue-600 bg-blue-50 hover:bg-blue-100':'text-gray-400 bg-gray-50 cursor-not-allowed'}`}><MdSave className="w-4 h-4"/> Save</button>
+          <button onClick={() => setShowExport(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"><MdDownload className="w-4 h-4"/> Download</button>
         </div>
       </div>
 
-      {/* Editor */}
-      <div className="flex-1 overflow-hidden">
-        <ResumeEditor onExport={handleExport} />
-      </div>
+      <div className="flex-1 overflow-hidden"><ResumeEditor onExport={handleExport} /></div>
 
-      {/* Upload Modal */}
-      <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload Your Resume" size="md">
-        <FileUpload 
-          onFileSelect={handleFileUpload} 
-          label="Upload Resume" 
-          description="Upload PDF, DOCX, or TXT. We'll extract all information and populate the editor." 
-        />
+      <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload Resume" size="md">
+        <FileUpload onFileSelect={handleFileUpload} label="Upload Resume" description="Upload PDF, DOCX, or TXT. We'll populate all sections automatically." />
       </Modal>
 
-      {/* Export Modal */}
-      <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Download Resume" size="sm">
+      <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Download" size="sm">
         <div className="space-y-3">
-          {[
-            { format: 'pdf', icon: <MdPictureAsPdf />, label: 'PDF Document', desc: 'Best for applications', color: 'text-red-600 bg-red-50' },
-            { format: 'docx', icon: <MdDescription />, label: 'Word Document', desc: 'Editable format', color: 'text-blue-600 bg-blue-50' },
-            { format: 'txt', icon: <MdTextSnippet />, label: 'Plain Text', desc: 'ATS-optimized', color: 'text-green-600 bg-green-50' },
-          ].map((option) => (
-            <button key={option.format} onClick={() => handleExport(option.format)} className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition-colors">
-              <div className={`w-10 h-10 ${option.color} rounded-lg flex items-center justify-center`}>
-                {React.cloneElement(option.icon, { className: 'w-5 h-5' })}
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-semibold text-gray-900">{option.label}</p>
-                <p className="text-xs text-gray-500">{option.desc}</p>
-              </div>
+          {[{format:'pdf',icon:<MdPictureAsPdf/>,label:'PDF',desc:'Best for applications',color:'text-red-600 bg-red-50'},{format:'docx',icon:<MdDescription/>,label:'Word',desc:'Editable',color:'text-blue-600 bg-blue-50'},{format:'txt',icon:<MdTextSnippet/>,label:'Text',desc:'ATS-optimized',color:'text-green-600 bg-green-50'}].map(o=>(
+            <button key={o.format} onClick={()=>handleExport(o.format)} className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50">
+              <div className={`w-10 h-10 ${o.color} rounded-lg flex items-center justify-center`}>{React.cloneElement(o.icon,{className:'w-5 h-5'})}</div>
+              <div className="text-left"><p className="text-sm font-semibold text-gray-900">{o.label}</p><p className="text-xs text-gray-500">{o.desc}</p></div>
             </button>
           ))}
         </div>
