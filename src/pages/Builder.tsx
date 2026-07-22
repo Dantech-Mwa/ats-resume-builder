@@ -518,7 +518,7 @@ const Builder: React.FC = () => {
       const history = JSON.parse(localStorage.getItem('resumeParserCorrectionHistory') || '[]');
       
       if (history.length === 0) {
-        toast.info('No corrections to train on. Parse some resumes first!');
+        toast('No corrections to train on. Parse some resumes first!');
         return;
       }
 
