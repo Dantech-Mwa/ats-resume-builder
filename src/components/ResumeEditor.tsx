@@ -357,10 +357,13 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({
               category: s.category || 'Soft Skills',
               selfRated: s.selfRated || 3,
             })),
-            languages: (parsed.skills?.languages || []).map((s: any) => ({
-              name: s.name || s,
-              proficiency: s.proficiency || 'Intermediate',
-            })),
+            // TO THIS (correct - using Skill interface)
+languages: (parsed.skills?.languages || []).map((s: any) => ({
+  name: s.name || s,
+  level: s.proficiency || s.level || 'Intermediate',
+  category: 'Languages',
+  selfRated: s.selfRated || 3,
+})),
             tools: (parsed.skills?.tools || []).map((s: any) => ({
               name: s.name || s,
               level: s.level || 'Intermediate',
