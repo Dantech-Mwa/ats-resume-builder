@@ -2,9 +2,12 @@
   "name": "ats-resume-builder",
   "version": "1.0.0",
   "private": true,
-  "description": "World-class ATS-friendly Resume Builder with AI optimization",
+  "description": "World-class ATS-friendly Resume Builder with AI optimization and ML-powered parsing",
   "homepage": "https://Dantech-Mwa.github.io/ats-resume-builder",
   "dependencies": {
+    "@tensorflow/tfjs": "^4.15.0",
+    "@tensorflow/tfjs-backend-cpu": "^4.15.0",
+    "@tensorflow/tfjs-backend-webgl": "^4.15.0",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
@@ -62,5 +65,13 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "overrides": {
+    "react-scripts": {
+      "webpack": "^5.88.0"
+    }
+  },
+  "resolutions": {
+    "webpack": "^5.88.0"
   }
 }
