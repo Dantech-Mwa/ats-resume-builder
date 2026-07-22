@@ -1,3 +1,4 @@
+// src/lib/types.ts
 // ============================================
 // ATS RESUME BUILDER - COMPLETE TYPE SYSTEM
 // ENHANCED VERSION WITH ML & ADVANCED FEATURES
@@ -9,7 +10,7 @@
 
 export type SubscriptionPlan = 'trial' | 'monthly' | 'yearly' | 'none';
 export type SubscriptionStatus = 'active' | 'expired' | 'cancelled' | 'pending' | 'grace_period';
-export type PaymentMethod = 'paypal' | 'stripe' | 'none' | 'crypto';
+export type PaymentMethod = 'paypal' | 'stripe' | 'none';
 
 export interface Subscription {
   plan: SubscriptionPlan;
@@ -338,7 +339,6 @@ export interface ResumeSections {
   publications: Publication[];
   awards: Award[];
   customSections: CustomSection[];
-  // New sections
   professionalAffiliations: ProfessionalAffiliation[];
   conferences: Conference[];
   patents: Patent[];
@@ -552,7 +552,7 @@ export interface TrainingExample {
 // TEMPLATE TYPES - ENHANCED
 // -------------------------------------------
 
-export type TemplateCategory = 'professional' | 'creative' | 'academic' | 'executive' | 'modern' | 'simple' | 'technical' | 'executive';
+export type TemplateCategory = 'professional' | 'creative' | 'academic' | 'executive' | 'modern' | 'simple' | 'technical';
 export type TemplateStyle = 'minimal' | 'elegant' | 'bold' | 'classic' | 'contemporary' | 'structured';
 
 export interface TemplateConfig {
@@ -649,7 +649,7 @@ export interface TemplateSectionConfig {
 }
 
 // -------------------------------------------
-// PAYMENT TYPES - ENHANCED
+// PAYMENT TYPES
 // -------------------------------------------
 
 export interface PricingPlan {
@@ -658,17 +658,11 @@ export interface PricingPlan {
   price: number;
   originalPrice?: number;
   currency: string;
-  duration: 'trial' | 'monthly' | 'yearly' | 'lifetime';
+  duration: 'trial' | 'monthly' | 'yearly';
   features: string[];
   highlighted: boolean;
   badge?: string;
   buttonText: string;
-  discountPercentage: number;
-  paymentGateways: PaymentMethod[];
-  includesTrial: boolean;
-  trialDays: number;
-  teamSize: number;
-  teamPrice: number;
 }
 
 export interface PaymentDetails {
@@ -676,14 +670,11 @@ export interface PaymentDetails {
   amount: number;
   currency: string;
   method: PaymentMethod;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'chargeback' | 'voided';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'chargeback';
   transactionId: string;
   createdAt: string;
   completedAt?: string;
   receiptUrl?: string;
-  billingAddress?: BillingAddress;
-  paymentIntentId?: string;
-  subscriptionId?: string;
 }
 
 export interface BillingAddress {
@@ -952,8 +943,8 @@ export interface UserJourneyEvent {
 // EXPORT & IMPORT TYPES
 // -------------------------------------------
 
-export type ExportFormat = 'pdf' | 'docx' | 'txt' | 'json' | 'html' | 'xml' | 'csv';
-export type ImportFormat = 'pdf' | 'docx' | 'txt' | 'linkedin' | 'json' | 'xml' | 'html';
+export type ExportFormat = 'pdf' | 'docx' | 'txt' | 'json' | 'html' | 'xml';
+export type ImportFormat = 'pdf' | 'docx' | 'txt' | 'linkedin' | 'json' | 'xml';
 
 export interface ExportConfig {
   format: ExportFormat;
@@ -1139,9 +1130,11 @@ export interface PerformanceReport {
 }
 
 // ============================================
-// EXPORT ALL TYPES
+// EXPORT ALL TYPES - Keep as is
 // ============================================
 
+// Note: These exports assume you have separate files or you can remove them
+// if all types are defined in this single file
 export * from './auth';
 export * from './resume';
 export * from './ats';
