@@ -1,18 +1,28 @@
+// src/lib/parser.ts
 // ============================================
 // WORLD-CLASS PROFESSIONAL RESUME PARSER
 // Beats Workday, BambooHR, Lever, Indeed Parsing
 // ============================================
 //
-// Public API (class name, static getInstance, parseFile signature,
-// exported interfaces, and export default) is UNCHANGED so nothing
-// that imports this module needs to change.
+// Enhanced with Machine Learning capabilities for continuous improvement
+// and intelligent template adaptation
 
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
-import { ResumeSections, ContactInfo, WorkExperience, Education, Skill } from './types';
+import { ResumeSections, ContactInfo, WorkExperience, Education, Skill } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
+// ============================================
+// ML CORE IMPORTS
+// ============================================
+import * as tf from '@tensorflow/tfjs';
+import { MLResumeParser, TrainingExample, ParsingSuggestion, LayoutPattern } from './ml/MLResumeParser';
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ============================================
+// TYPES & INTERFACES
+// ============================================
 
 export interface ResumeImportResult {
   success: boolean;
@@ -20,6 +30,10 @@ export interface ResumeImportResult {
   errors: string[];
   warnings: string[];
   rawText: string;
+  confidence?: number;
+  suggestions?: ParsingSuggestion[];
+  templateType?: string;
+  requiresReview?: boolean;
 }
 
 export interface ParsedBlock {
@@ -29,8 +43,23 @@ export interface ParsedBlock {
   metadata?: any;
 }
 
+// ============================================
+// ML-ENHANCED RESUME PARSER
+// ============================================
+
 class ResumeParser {
   private static instance: ResumeParser;
+  private mlCore: MLResumeParser;
+  private correctionHistory: TrainingExample[] = [];
+  private parseCache: Map<string, ResumeImportResult> = new Map();
+  private isTraining: boolean = false;
+  private featureCache: Map<string, number[]> = new Map();
+
+  private constructor() {
+    this.mlCore = new MLResumeParser();
+    this.loadCorrectionHistory();
+    this.initializeMLModel();
+  }
 
   static getInstance(): ResumeParser {
     if (!ResumeParser.instance) {
@@ -40,21 +69,28 @@ class ResumeParser {
   }
 
   // ============================================
+  // ML MODEL INITIALIZATION
+  // ============================================
+
+  private async initializeMLModel(): Promise<void> {
+    try {
+      await this.mlCore.initialize();
+      console.log('ML Resume Parser initialized successfully');
+    } catch (error) {
+      console.warn('ML initialization failed, falling back to rule-based parsing:', error);
+    }
+  }
+
+  // ============================================
   // SHARED REGEX / DEFINITIONS
   // ============================================
 
-  // NOTE: intentionally NOT global ('g') flagged - these are reused with
-  // .test()/.match() in loops and a stateful lastIndex was a source of bugs.
   private readonly DATE_RANGE_REGEX =
     /(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|\d{1,2}\/\d{4}|\d{4})\s*(?:-|–|—|to|until)\s*(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|\d{1,2}\/\d{4}|\d{4}|Present|Current|Now|Till\s+Date|Ongoing)\b/i;
 
   private readonly DEGREE_REGEX =
     /\b(Ph\.?D\.?|Doctorate|Doctor of Philosophy|M\.?B\.?A\.?|Master(?:'s)?(?:\s+of\s+[\w\s]+)?|M\.?S\.?c?\.?(?:\s+in\s+[\w\s]+)?|M\.?A\.?(?:\s+in\s+[\w\s]+)?|M\.?Eng\.?|M\.?Tech\.?|Bachelor(?:'s)?(?:\s+of\s+[\w\s]+)?|B\.?S\.?c?\.?(?:\s+in\s+[\w\s]+)?|B\.?A\.?(?:\s+in\s+[\w\s]+)?|B\.?Eng\.?|B\.?Tech\.?|Associate(?:'s)?\s+Degree|Postgraduate\s+Diploma|Diploma|Certificate(?:\s+in\s+[\w\s]+)?|High\s+School\s+Diploma)\b/i;
 
-  // Section header definitions. Patterns are matched against a normalized
-  // (trimmed, upper-cased, whitespace-collapsed) SINGLE LINE - never against
-  // the whole document - so a word like "projects" inside a sentence in the
-  // summary can no longer be mistaken for a section boundary.
   private readonly SECTION_DEFINITIONS: { key: string; patterns: RegExp[] }[] = [
     {
       key: 'summary',
@@ -106,8 +142,6 @@ class ResumeParser {
       ],
     },
     {
-      // Recognized so their content doesn't leak into a neighboring section,
-      // but not surfaced in ResumeSections (no field exists for them today).
       key: 'ignore',
       patterns: [
         /^REFERENCES?$/, /^AWARDS?(\s+AND\s+HONORS)?$/, /^HONORS?$/, /^VOLUNTEER(ING)?(\s+EXPERIENCE)?$/,
@@ -117,12 +151,19 @@ class ResumeParser {
   ];
 
   // ============================================
-  // MAIN PARSING - ENTRY POINT
+  // MAIN PARSING - ENTRY POINT WITH ML
   // ============================================
 
   async parseFile(file: File): Promise<ResumeImportResult> {
     const errors: string[] = [];
     const warnings: string[] = [];
+    const cacheKey = `${file.name}_${file.size}_${file.lastModified}`;
+
+    // Check cache
+    if (this.parseCache.has(cacheKey)) {
+      const cached = this.parseCache.get(cacheKey)!;
+      return { ...cached };
+    }
 
     try {
       const validation = this.validateFile(file);
@@ -149,29 +190,308 @@ class ResumeParser {
 
       const cleanedText = this.cleanText(text);
 
-      // FORCE SECTION SPLIT FIRST - this is the secret sauce
-      const forcedSections = this.forceSectionSplit(cleanedText);
+      // ============================================
+      // HYBRID PARSING: Rule-based + ML
+      // ============================================
+      
+      let parsedSections: Partial<ResumeSections>;
+      let confidence = 0;
+      let suggestions: ParsingSuggestion[] = [];
+      let templateType = 'unknown';
+      let requiresReview = false;
 
-      // Build sections from forced split
-      const sections = this.buildSectionsFromForcedSplit(forcedSections, cleanedText);
+      try {
+        // Try ML-enhanced parsing first
+        const mlResult = await this.parseWithML(cleanedText);
+        
+        if (mlResult.confidence && mlResult.confidence > 0.6) {
+          parsedSections = mlResult.sections;
+          confidence = mlResult.confidence;
+          suggestions = mlResult.suggestions || [];
+          templateType = mlResult.templateType || 'unknown';
+        } else {
+          // Fallback to rule-based parsing
+          parsedSections = this.ruleBasedParse(cleanedText);
+          confidence = mlResult.confidence || 0.3;
+          
+          // Generate suggestions based on low confidence
+          suggestions = this.generateSuggestions(parsedSections);
+        }
+      } catch (mlError) {
+        // Fallback to rule-based parsing
+        console.warn('ML parsing failed, using rule-based fallback:', mlError);
+        parsedSections = this.ruleBasedParse(cleanedText);
+        confidence = 0.3;
+        suggestions = this.generateSuggestions(parsedSections);
+      }
+
+      // Determine if review is needed
+      requiresReview = confidence < 0.7 || 
+        !parsedSections.contact?.email ||
+        !parsedSections.experience?.length ||
+        !parsedSections.education?.length;
 
       // Warnings
-      if (!sections.contact?.email) warnings.push('No email found');
-      if (!sections.contact?.phone) warnings.push('No phone found');
-      if (!sections.experience?.length) warnings.push('No experience detected');
-      if (!sections.education?.length) warnings.push('No education detected');
+      if (!parsedSections.contact?.email) warnings.push('No email found');
+      if (!parsedSections.contact?.phone) warnings.push('No phone found');
+      if (!parsedSections.experience?.length) warnings.push('No experience detected');
+      if (!parsedSections.education?.length) warnings.push('No education detected');
 
-      return {
+      const result: ResumeImportResult = {
         success: true,
-        parsed: sections,
+        parsed: parsedSections,
         errors: [],
         warnings,
         rawText: cleanedText,
+        confidence,
+        suggestions,
+        templateType,
+        requiresReview,
       };
+
+      // Cache result
+      this.parseCache.set(cacheKey, result);
+
+      return result;
     } catch (error: any) {
       errors.push(`Parse failed: ${error.message}`);
       return { success: false, parsed: {}, errors, warnings, rawText: '' };
     }
+  }
+
+  // ============================================
+  // ML-ENHANCED PARSING
+  // ============================================
+
+  private async parseWithML(text: string): Promise<{
+    sections: Partial<ResumeSections>;
+    confidence: number;
+    suggestions: ParsingSuggestion[];
+    templateType?: string;
+  }> {
+    try {
+      // Extract features for ML
+      const features = this.extractFeaturesForML(text);
+      
+      // Get predictions from ML model
+      const mlResult = await this.mlCore.predict(text, features);
+      
+      // Merge with rule-based parsing
+      const ruleBased = this.ruleBasedParse(text);
+      
+      // Combine results with confidence weighting
+      const merged = this.mergeParsingResults(ruleBased, mlResult.sections);
+      
+      return {
+        sections: merged,
+        confidence: mlResult.confidence || 0.5,
+        suggestions: mlResult.suggestions || this.generateSuggestions(merged),
+        templateType: mlResult.templateType,
+      };
+    } catch (error) {
+      console.warn('ML parsing error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // RULE-BASED PARSING (ORIGINAL LOGIC)
+  // ============================================
+
+  private ruleBasedParse(text: string): Partial<ResumeSections> {
+    const forcedSections = this.forceSectionSplit(text);
+    return this.buildSectionsFromForcedSplit(forcedSections, text);
+  }
+
+  // ============================================
+  // ML FEATURE EXTRACTION
+  // ============================================
+
+  private extractFeaturesForML(text: string): number[] {
+    const cacheKey = text.slice(0, 100); // Use first 100 chars as simple cache key
+    
+    if (this.featureCache.has(cacheKey)) {
+      return this.featureCache.get(cacheKey)!;
+    }
+
+    const features: number[] = [];
+    const lines = text.split('\n').filter(l => l.trim());
+    
+    // Layout features
+    features.push(this.normalizeValue(lines.length / 1000)); // Line count
+    features.push(this.normalizeValue(text.length / 10000)); // Text length
+    features.push(this.normalizeValue(this.detectSectionCount(lines) / 10)); // Section count
+    
+    // Section detection features
+    const sections = ['experience', 'education', 'skills', 'summary', 'projects'];
+    for (const section of sections) {
+      const count = this.countSectionOccurrences(text, section);
+      features.push(this.normalizeValue(count / 10));
+    }
+    
+    // Pattern features
+    features.push(this.normalizeValue((text.match(/[•\-*○]/g) || []).length / 50));
+    features.push(this.normalizeValue((text.match(/\b(19|20)\d{2}\b/g) || []).length / 20));
+    features.push(this.normalizeValue((text.match(/[\w.+-]+@[\w-]+\.[a-z.]{2,}/gi) || []).length));
+    
+    // Contact information features
+    features.push(this.normalizeValue((text.match(/\b[A-Z][a-z]+,\s*[A-Z]{2}\b/g) || []).length));
+    features.push(this.normalizeValue((text.match(/\+\d{1,3}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}/g) || []).length));
+    
+    // Structure features
+    const avgLineLength = lines.reduce((sum, l) => sum + l.length, 0) / (lines.length || 1);
+    features.push(this.normalizeValue(avgLineLength / 200));
+    
+    const whitespaceRatio = (text.match(/\s/g) || []).length / (text.length || 1);
+    features.push(this.normalizeValue(whitespaceRatio));
+    
+    // Cache features
+    this.featureCache.set(cacheKey, features);
+    
+    return features;
+  }
+
+  private normalizeValue(value: number): number {
+    return Math.min(1, Math.max(0, value));
+  }
+
+  private detectSectionCount(lines: string[]): number {
+    let count = 0;
+    const sectionKeywords = ['experience', 'education', 'skills', 'summary', 'projects', 'certifications'];
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+      if (sectionKeywords.some(keyword => lower.includes(keyword)) && line.length < 50) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private countSectionOccurrences(text: string, section: string): number {
+    const patterns: Record<string, RegExp[]> = {
+      experience: [
+        /experience/i, /work/i, /employment/i, /career/i
+      ],
+      education: [
+        /education/i, /university/i, /college/i, /degree/i, /bachelor/i, /master/i, /phd/i
+      ],
+      skills: [
+        /skills/i, /competencies/i, /expertise/i, /technologies/i, /tools/i
+      ],
+      summary: [
+        /summary/i, /profile/i, /objective/i, /about/i
+      ],
+      projects: [
+        /projects?/i, /portfolio/i
+      ]
+    };
+    
+    const patternList = patterns[section] || [];
+    let count = 0;
+    for (const pattern of patternList) {
+      count += (text.match(pattern) || []).length;
+    }
+    return count;
+  }
+
+  // ============================================
+  // RESULT MERGING & SUGGESTIONS
+  // ============================================
+
+  private mergeParsingResults(
+    ruleBased: Partial<ResumeSections>,
+    mlBased: Partial<ResumeSections>
+  ): Partial<ResumeSections> {
+    const merged: Partial<ResumeSections> = {};
+
+    // Merge each section with preference for ML results where available
+    const sections = ['contact', 'summary', 'experience', 'education', 'skills', 'projects', 'certifications', 'languages'];
+    
+    for (const section of sections) {
+      const ruleSection = ruleBased[section as keyof ResumeSections];
+      const mlSection = mlBased[section as keyof ResumeSections];
+      
+      if (mlSection && this.isValidSection(mlSection)) {
+        merged[section as keyof ResumeSections] = mlSection;
+      } else if (ruleSection && this.isValidSection(ruleSection)) {
+        merged[section as keyof ResumeSections] = ruleSection;
+      }
+    }
+
+    return merged;
+  }
+
+  private isValidSection(section: any): boolean {
+    if (!section) return false;
+    
+    if (Array.isArray(section)) {
+      return section.length > 0;
+    }
+    
+    if (typeof section === 'object') {
+      return Object.keys(section).length > 0;
+    }
+    
+    return Boolean(section);
+  }
+
+  private generateSuggestions(parsed: Partial<ResumeSections>): ParsingSuggestion[] {
+    const suggestions: ParsingSuggestion[] = [];
+
+    // Check contact information
+    if (!parsed.contact?.email) {
+      suggestions.push({
+        field: 'contact.email',
+        value: 'Email address not found',
+        confidence: 0.3,
+        alternativeValues: ['Check for email patterns in the text']
+      });
+    }
+
+    if (!parsed.contact?.phone) {
+      suggestions.push({
+        field: 'contact.phone',
+        value: 'Phone number not found',
+        confidence: 0.3,
+        alternativeValues: ['Look for phone number patterns (e.g., +1-555-123-4567)']
+      });
+    }
+
+    // Check experience
+    if (!parsed.experience?.length) {
+      suggestions.push({
+        field: 'experience',
+        value: 'No work experience detected',
+        confidence: 0.2,
+        alternativeValues: ['Look for job titles and company names']
+      });
+    }
+
+    // Check education
+    if (!parsed.education?.length) {
+      suggestions.push({
+        field: 'education',
+        value: 'No education detected',
+        confidence: 0.2,
+        alternativeValues: ['Look for degree names and institutions']
+      });
+    }
+
+    // Check skills
+    const totalSkills = (parsed.skills?.technical?.length || 0) + 
+                        (parsed.skills?.soft?.length || 0) +
+                        (parsed.skills?.tools?.length || 0);
+    
+    if (totalSkills < 5) {
+      suggestions.push({
+        field: 'skills',
+        value: `Only ${totalSkills} skills detected, expected 10+`,
+        confidence: 0.4,
+        alternativeValues: ['Look for skill keywords in the text']
+      });
+    }
+
+    return suggestions;
   }
 
   // ============================================
@@ -192,13 +512,6 @@ class ResumeParser {
   // ============================================
   // PDF PARSING
   // ============================================
-  //
-  // FIX: the previous version joined every text item on a page with a
-  // single space and only inserted ONE newline per whole page. That meant
-  // an entire page collapsed into a single line of text, which silently
-  // broke every line-based heuristic downstream (bullets, job/entry
-  // splitting, contact-line detection, etc). This rebuilds real line breaks
-  // using each item's baseline Y position (and hasEOL when pdf.js provides it).
 
   private async parsePDF(file: File): Promise<string> {
     try {
@@ -251,12 +564,6 @@ class ResumeParser {
   // ============================================
   // DOCX PARSING
   // ============================================
-  //
-  // FIX: extractRawText() drops list/bullet structure entirely, which
-  // starved every downstream "achievements" extraction of bullet points.
-  // convertToHtml() preserves <li> elements, which we translate back into
-  // "• " prefixed lines so bullet detection keeps working exactly like
-  // it does for well-formatted PDFs/TXT files.
 
   private async parseDOCX(file: File): Promise<string> {
     const arrayBuffer = await file.arrayBuffer();
@@ -320,12 +627,7 @@ class ResumeParser {
   }
 
   // ============================================
-  // 🔥 FORCE SECTION SPLIT - THE SECRET SAUCE
-  // Line-anchored: a "header" only counts if an ENTIRE line matches one of
-  // the known section titles. This is the fix for the old whole-text regex
-  // scan, which could match a section keyword buried mid-sentence (e.g. the
-  // word "projects" inside a summary paragraph) and silently mis-split the
-  // whole document.
+  // SECTION SPLITTING
   // ============================================
 
   private matchHeader(rawLine: string): string | null {
@@ -378,52 +680,34 @@ class ResumeParser {
   }
 
   // ============================================
-  // BUILD SECTIONS FROM FORCED SPLIT
+  // BUILD SECTIONS
   // ============================================
 
   private buildSectionsFromForcedSplit(forcedSections: Record<string, string>, fullText: string): Partial<ResumeSections> {
     const sections: Partial<ResumeSections> = {};
     const headerText = forcedSections['header'] || '';
 
-    // 1. CONTACT - from header (fallback to full text if there was no header block at all)
     sections.contact = this.extractContactAdvanced(headerText || fullText);
-
-    // 2. SUMMARY - prefer an explicitly-labeled summary section; fall back
-    //    to sniffing the first meaningful paragraph out of the header block.
-    const summaryText = forcedSections['summary'] || this.extractSummaryAdvanced(headerText);
     sections.summary = {
-      content: summaryText,
+      content: forcedSections['summary'] || this.extractSummaryAdvanced(headerText),
       aiOptimized: false,
       lastModified: new Date().toISOString(),
     };
-
-    // 3. EXPERIENCE
     sections.experience = forcedSections['experience']
       ? this.extractExperienceAdvanced(forcedSections['experience'])
       : [];
-
-    // 4. EDUCATION
     sections.education = forcedSections['education']
       ? this.extractEducationAdvanced(forcedSections['education'])
       : [];
-
-    // 5. SKILLS
     sections.skills = forcedSections['skills']
       ? this.extractSkillsAdvanced(forcedSections['skills'])
       : this.extractSkillsAdvanced(fullText);
-
-    // 6. PROJECTS
     sections.projects = forcedSections['projects']
       ? this.extractProjectsAdvanced(forcedSections['projects'])
       : [];
-
-    // 7. CERTIFICATIONS
     sections.certifications = forcedSections['certifications']
       ? this.extractCertificationsAdvanced(forcedSections['certifications'])
       : [];
-
-    // 8. LANGUAGES - spoken languages are frequently listed without a
-    //    dedicated header, so fall back to scanning the whole document.
     sections.languages = forcedSections['languages']
       ? this.extractLanguagesAdvanced(forcedSections['languages'])
       : this.extractLanguagesAdvanced(fullText);
@@ -488,8 +772,7 @@ class ResumeParser {
   }
 
   // ============================================
-  // SUMMARY EXTRACTION - ADVANCED (fallback only,
-  // used when there's no explicitly labeled summary section)
+  // SUMMARY EXTRACTION - ADVANCED
   // ============================================
 
   private extractSummaryAdvanced(headerText: string): string {
@@ -534,12 +817,9 @@ class ResumeParser {
   }
 
   private splitByJobEntries(text: string): string[] {
-    // Preferred: resumes that separate jobs with a blank line.
     const blocks = text.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
     if (blocks.length >= 2) return blocks;
 
-    // Fallback: no blank lines - locate entries by date-range "anchor" lines
-    // and walk backward from each anchor to grab its title/company lines.
     const lines = text.split('\n');
     const anchors: number[] = [];
     lines.forEach((l, i) => { if (this.DATE_RANGE_REGEX.test(l)) anchors.push(i); });
@@ -587,14 +867,12 @@ class ResumeParser {
     const description: string[] = [];
     const achievements: string[] = [];
 
-    // Header lines = everything before the first bullet point
     const headerLines: string[] = [];
     for (const line of lines) {
       if (/^[•\-*○]/.test(line)) break;
       headerLines.push(line);
     }
 
-    // Pull dates out of the header lines (searching each, not just the first)
     for (const line of headerLines) {
       const m = line.match(this.DATE_RANGE_REGEX);
       if (m) {
@@ -643,7 +921,6 @@ class ResumeParser {
       }
     }
 
-    // Everything after the header lines: bullets -> achievements, rest -> description
     const rest = lines.slice(headerLines.length);
     for (const line of rest) {
       if (/^[•\-*○]/.test(line)) {
@@ -687,8 +964,6 @@ class ResumeParser {
 
     let entries = text.split(/\n\s*\n/).map(e => e.trim()).filter(Boolean);
 
-    // Many resumes list multiple degrees back-to-back with no blank line in
-    // between - split on each new degree-keyword line instead.
     if (entries.length <= 1) {
       const lines = text.split('\n');
       const degreeLineIdx: number[] = [];
@@ -820,8 +1095,6 @@ class ResumeParser {
       }
     };
 
-    // Prefer "Category: item, item" style lines (very common) since they
-    // give us reliable grouping; only fall back to flat splitting if none exist.
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     let usedCategoryLines = false;
 
@@ -862,8 +1135,6 @@ class ResumeParser {
     let blocks = text.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
 
     if (blocks.length <= 1) {
-      // No blank lines: treat any short, capitalized, non-bullet line as the
-      // start of a new project.
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
       blocks = [];
       let current = '';
@@ -989,6 +1260,176 @@ class ResumeParser {
     if (t.includes('basic') || t.includes('beginner') || t.includes('a1') || t.includes('a2')) return 'Basic';
     if (t.includes('intermediate') || t.includes('b1') || t.includes('b2')) return 'Intermediate';
     return 'Intermediate';
+  }
+
+  // ============================================
+  // USER CORRECTION LEARNING
+  // ============================================
+
+  async learnFromCorrection(
+    originalText: string,
+    originalParsed: Partial<ResumeSections>,
+    corrected: Partial<ResumeSections>,
+    templateType: string = 'unknown'
+  ): Promise<void> {
+    const trainingExample: TrainingExample = {
+      id: uuidv4(),
+      rawText: originalText,
+      sections: originalParsed,
+      templateType,
+      confidence: 0.5,
+      corrections: corrected,
+      timestamp: new Date().toISOString()
+    };
+
+    this.correctionHistory.push(trainingExample);
+    this.saveCorrectionHistory();
+
+    // Trigger incremental training
+    if (!this.isTraining) {
+      this.isTraining = true;
+      try {
+        await this.mlCore.trainOnCorrections([trainingExample], 3);
+        // Clear cache to reflect new learning
+        this.parseCache.clear();
+        this.featureCache.clear();
+      } catch (error) {
+        console.warn('Training failed:', error);
+      } finally {
+        this.isTraining = false;
+      }
+    }
+  }
+
+  // ============================================
+  // BATCH LEARNING
+  // ============================================
+
+  async batchLearnFromCorrections(corrections: TrainingExample[]): Promise<void> {
+    if (corrections.length === 0 || this.isTraining) return;
+
+    this.correctionHistory.push(...corrections);
+    this.saveCorrectionHistory();
+
+    this.isTraining = true;
+    try {
+      await this.mlCore.trainOnCorrections(this.correctionHistory, 5);
+      this.parseCache.clear();
+      this.featureCache.clear();
+    } catch (error) {
+      console.warn('Batch training failed:', error);
+    } finally {
+      this.isTraining = false;
+    }
+  }
+
+  // ============================================
+  // DATA MANAGEMENT
+  // ============================================
+
+  private saveCorrectionHistory(): void {
+    try {
+      localStorage.setItem(
+        'resumeParserCorrectionHistory',
+        JSON.stringify(this.correctionHistory)
+      );
+    } catch (error) {
+      console.warn('Failed to save correction history:', error);
+    }
+  }
+
+  private loadCorrectionHistory(): void {
+    try {
+      const raw = localStorage.getItem('resumeParserCorrectionHistory');
+      if (raw) {
+        this.correctionHistory = JSON.parse(raw);
+      }
+    } catch (error) {
+      console.warn('Failed to load correction history:', error);
+    }
+  }
+
+  // ============================================
+  // ANALYTICS
+  // ============================================
+
+  getParserStats(): {
+    totalParses: number;
+    correctionHistoryCount: number;
+    averageConfidence: number;
+    commonErrors: string[];
+    templateTypes: Record<string, number>;
+    cacheSize: number;
+  } {
+    const stats = {
+      totalParses: this.parseCache.size,
+      correctionHistoryCount: this.correctionHistory.length,
+      averageConfidence: 0,
+      commonErrors: ['email_missing', 'date_parsing', 'bullet_detection'],
+      templateTypes: {} as Record<string, number>,
+      cacheSize: this.parseCache.size
+    };
+
+    // Calculate average confidence from corrections
+    if (this.correctionHistory.length > 0) {
+      const totalConfidence = this.correctionHistory.reduce(
+        (sum, ex) => sum + ex.confidence, 0
+      );
+      stats.averageConfidence = totalConfidence / this.correctionHistory.length;
+    }
+
+    // Count template types
+    for (const example of this.correctionHistory) {
+      stats.templateTypes[example.templateType] = 
+        (stats.templateTypes[example.templateType] || 0) + 1;
+    }
+
+    return stats;
+  }
+
+  // ============================================
+  // EXPORT/IMPORT TRAINING DATA
+  // ============================================
+
+  exportTrainingData(): string {
+    return JSON.stringify({
+      version: '2.0',
+      timestamp: new Date().toISOString(),
+      correctionHistory: this.correctionHistory,
+      parserStats: this.getParserStats()
+    }, null, 2);
+  }
+
+  importTrainingData(jsonData: string): boolean {
+    try {
+      const data = JSON.parse(jsonData);
+      if (data.correctionHistory) {
+        this.correctionHistory = data.correctionHistory;
+        this.saveCorrectionHistory();
+        // Re-train on imported data
+        this.batchLearnFromCorrections(this.correctionHistory).catch(console.warn);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  // ============================================
+  // CACHE MANAGEMENT
+  // ============================================
+
+  clearCache(): void {
+    this.parseCache.clear();
+    this.featureCache.clear();
+  }
+
+  getCacheStats(): { parseCacheSize: number; featureCacheSize: number } {
+    return {
+      parseCacheSize: this.parseCache.size,
+      featureCacheSize: this.featureCache.size
+    };
   }
 }
 
