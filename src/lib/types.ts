@@ -77,6 +77,30 @@ export interface ProfessionalSummary {
   wordCount?: number;
 }
 
+// ============================================
+// NEW: Supporting interfaces for WorkExperience
+// ============================================
+
+export interface PromotionHistory {
+  date: string;
+  fromPosition: string;
+  toPosition: string;
+  reason: string;
+}
+
+export interface ExperienceProject {
+  id: string;
+  name: string;
+  description: string;
+  technologies: string[];
+  achievements: string[];
+  link?: string;
+}
+
+// ============================================
+// FIXED: WorkExperience with all fields used by parser.ts
+// ============================================
+
 export interface WorkExperience {
   id: string;
   company: string;
@@ -89,6 +113,14 @@ export interface WorkExperience {
   achievements: string[];
   technologies: string[];
   aiSuggestions: string[];
+  // NEW: Fields used by parser.ts
+  industry?: string;
+  companyType?: 'Startup' | 'SME' | 'Large Enterprise' | 'Non-Profit' | 'Government' | 'Education';
+  employmentType?: 'Full-time' | 'Part-time' | 'Contract' | 'Freelance' | 'Internship' | 'Volunteer';
+  durationYears?: number;
+  skillsGained?: string[];
+  promotions?: PromotionHistory[];
+  projects?: ExperienceProject[];
 }
 
 export interface Education {
