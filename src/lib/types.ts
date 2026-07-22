@@ -70,11 +70,6 @@ export interface ProfessionalSummary {
   content: string;
   aiOptimized: boolean;
   lastModified: string;
-  // NEW: Optional fields
-  versions?: any[];  // Or use SummaryVersion[] if you define it
-  keywordDensity?: Record<string, number>;
-  characterCount?: number;
-  wordCount?: number;
 }
 
 export interface WorkExperience {
@@ -197,7 +192,7 @@ export interface CustomSectionItem {
 }
 
 // ============================================
-// NEW: ADD THESE TYPES (for ML Parser)
+// ADDED: Types needed by ML Parser (parser.ts)
 // ============================================
 
 export interface ProfessionalAffiliation {
@@ -243,7 +238,7 @@ export interface Reference {
 }
 
 // ============================================
-// UPDATE: ResumeSections with new optional fields
+// UPDATED: ResumeSections with new optional fields
 // ============================================
 
 export interface ResumeSections {
@@ -259,12 +254,16 @@ export interface ResumeSections {
   publications: Publication[];
   awards: Award[];
   customSections: CustomSection[];
-  // NEW: Optional fields for ML parser
+  // NEW: Optional fields for ML parser (parser.ts)
   professionalAffiliations?: ProfessionalAffiliation[];
   conferences?: Conference[];
   patents?: Patent[];
   references?: Reference[];
 }
+
+// ============================================
+// UPDATED: ResumeMetadata with ML parser fields
+// ============================================
 
 export interface ResumeMetadata {
   id: string;
@@ -279,6 +278,11 @@ export interface ResumeMetadata {
   targetRole?: string;
   targetIndustry?: string;
   completeness: number;
+  // NEW: Fields used by Builder.tsx and parser.ts
+  parsedWith?: string;
+  parsedConfidence?: number;
+  templateType?: string;
+  requiresReview?: boolean;
 }
 
 export interface ResumeData {
@@ -330,6 +334,8 @@ export interface AIRecommendation {
   type: 'improvement' | 'addition' | 'removal' | 'rewrite';
   applied: boolean;
   createdAt: string;
+  // NEW: Used by Builder.tsx
+  confidence?: number;
 }
 
 export interface AIAnalysis {
@@ -509,12 +515,32 @@ export interface ResumeExportOptions {
   sections: string[];
 }
 
+// ============================================
+// UPDATED: ResumeImportResult with ML parser fields
+// ============================================
+
 export interface ResumeImportResult {
   success: boolean;
   parsed: Partial<ResumeSections>;
   errors: string[];
   warnings: string[];
   rawText: string;
+  // NEW: Fields used by parser.ts and Builder.tsx
+  confidence?: number;
+  suggestions?: ParsingSuggestion[];
+  templateType?: string;
+  requiresReview?: boolean;
+}
+
+// ============================================
+// ADDED: ParsingSuggestion for ML parser
+// ============================================
+
+export interface ParsingSuggestion {
+  field: string;
+  value: any;
+  confidence: number;
+  alternativeValues?: any[];
 }
 
 // -------------------------------------------
