@@ -2,7 +2,6 @@
 // ============================================
 // WORLD-CLASS PROFESSIONAL RESUME PARSER
 // Beats Workday, BambooHR, Lever, Indeed Parsing
-// Enhanced with Universal Section Detection
 // ============================================
 
 import mammoth from 'mammoth';
@@ -279,10 +278,6 @@ class ResumeParser {
     return ResumeParser.instance;
   }
 
-  // ============================================
-  // ML MODEL INITIALIZATION
-  // ============================================
-
   private async initializeMLModel(): Promise<void> {
     try {
       await this.mlCore.initialize();
@@ -370,7 +365,6 @@ class ResumeParser {
     const warnings: string[] = [];
     const cacheKey = `${file.name}_${file.size}_${file.lastModified}`;
 
-    // Check cache
     if (this.parseCache.has(cacheKey)) {
       const cached = this.parseCache.get(cacheKey)!;
       return { ...cached };
@@ -417,21 +411,17 @@ class ResumeParser {
 
       const cleanedText = this.cleanText(text);
 
-      // ============================================
-      // HYBRID PARSING: Detected Sections + Rule-based + ML
-      // ============================================
+      // Build sections from detected sections first
+      const detectedParsed = this.buildSectionsFromDetected(detectedSections, cleanedText);
       
+      // Then try ML-enhanced parsing
       let parsedSections: Partial<ResumeSections>;
       let confidence = 0;
       let suggestions: ParsingSuggestion[] = [];
-      let templateType = 'unknown';
+      let templateType = 'detected';
       let requiresReview = false;
 
       try {
-        // Build sections from detected sections first
-        const detectedParsed = this.buildSectionsFromDetected(detectedSections, cleanedText);
-        
-        // Then try ML-enhanced parsing
         const mlResult = await this.parseWithML(cleanedText);
         
         // Merge detected sections with ML results
@@ -445,7 +435,6 @@ class ResumeParser {
           parsedSections = mlResult.sections;
           confidence = mlResult.confidence;
         } else {
-          // Fallback to rule-based parsing
           parsedSections = this.ruleBasedParse(cleanedText);
           confidence = mlResult.confidence || 0.3;
         }
@@ -454,20 +443,17 @@ class ResumeParser {
         templateType = mlResult.templateType || 'detected';
         
       } catch (mlError) {
-        // Fallback to rule-based parsing
         console.warn('ML parsing failed, using rule-based fallback:', mlError);
         parsedSections = this.ruleBasedParse(cleanedText);
         confidence = 0.3;
         suggestions = this.generateSuggestions(parsedSections);
       }
 
-      // Determine if review is needed
       requiresReview = confidence < 0.7 || 
         !parsedSections.contact?.email ||
         !parsedSections.experience?.length ||
         !parsedSections.education?.length;
 
-      // Warnings
       if (!parsedSections.contact?.email) warnings.push('No email found');
       if (!parsedSections.contact?.phone) warnings.push('No phone found');
       if (!parsedSections.experience?.length) warnings.push('No experience detected');
@@ -485,10 +471,9 @@ class ResumeParser {
         requiresReview,
       };
 
-      // Cache result
       this.parseCache.set(cacheKey, result);
-
       return result;
+
     } catch (error: any) {
       errors.push(`Parse failed: ${error.message}`);
       return { success: false, parsed: {}, errors, warnings, rawText: '' };
@@ -514,7 +499,6 @@ class ResumeParser {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
 
-        // Group by Y position (preserve exact layout)
         const lines: { y: number; text: string; x: number; width: number }[] = [];
 
         for (const item of content.items as any[]) {
@@ -539,10 +523,8 @@ class ResumeParser {
           line.width = (x + width) - (line.x || 0);
         }
 
-        // Sort by Y (top to bottom)
         lines.sort((a, b) => a.y - b.y);
 
-        // Build page text with layout preservation
         let pageText = '';
         let lastY = 0;
 
@@ -550,7 +532,6 @@ class ResumeParser {
           const line = lines[j];
           const gap = j === 0 ? 0 : line.y - lastY;
 
-          // Detect section headers
           const isSectionHeader = this.detectSectionHeader(line.text);
           const isJobTitle = this.detectJobTitle(line.text);
 
@@ -574,7 +555,6 @@ class ResumeParser {
         fullText += pageText + '\n\n';
       }
 
-      // Detect sections before main parser
       const sections = this.detectSectionsInText(fullText);
 
       return {
@@ -610,10 +590,7 @@ class ResumeParser {
         text = fallback.value || '';
       }
 
-      // Post-process for resume formatting
       text = this.postProcessResumeText(text);
-
-      // Detect sections before main parser
       const sections = this.detectSectionsInText(text);
 
       return {
@@ -635,18 +612,19 @@ class ResumeParser {
   }
 
   // ============================================
-  // UNIVERSAL SECTION DETECTION ENGINE
+  // FIXED: UNIVERSAL SECTION DETECTION ENGINE
   // ============================================
 
   private detectSectionsInText(text: string): Record<string, string> {
     const sections: Record<string, string> = {};
     const lines = text.split('\n');
+    
+    // Find all section headers with their line indices
     const sectionMarkers: { key: string; lineIdx: number; header: string }[] = [];
 
-    // Find all section headers
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      if (!line || line.length > 100) continue;
+      if (!line || line.length > 80) continue;
 
       const detected = this.detectSectionHeader(line);
       if (detected) {
@@ -666,20 +644,34 @@ class ResumeParser {
       const startIdx = current.lineIdx + 1;
       const endIdx = next ? next.lineIdx : lines.length;
 
-      // Get content between sections
-      let content = lines.slice(startIdx, endIdx).join('\n').trim();
+      let contentLines: string[] = [];
+      let foundContent = false;
+      
+      for (let j = startIdx; j < endIdx; j++) {
+        const line = lines[j];
+        if (!foundContent && !line.trim()) continue;
+        foundContent = true;
+        contentLines.push(line);
+      }
+      
+      let content = contentLines.join('\n').trim();
 
-      // Clean up content
       content = content
         .replace(/\n{3,}/g, '\n\n')
         .replace(/^[•\-*○]\s*/gm, '• ')
         .trim();
 
-      // Handle duplicate sections (like multiple skills sections)
-      if (sections[current.key]) {
-        sections[current.key] += '\n\n' + content;
-      } else {
+      if (content.length > 10) {
         sections[current.key] = content;
+      }
+    }
+
+    // If we have a header section, use it for contact info
+    if (sectionMarkers.length > 0 && !sections['contact']) {
+      const firstHeader = sectionMarkers[0];
+      const headerContent = lines.slice(0, firstHeader.lineIdx).join('\n').trim();
+      if (headerContent.length > 10) {
+        sections['contact'] = headerContent;
       }
     }
 
@@ -687,49 +679,86 @@ class ResumeParser {
   }
 
   // ============================================
-  // SECTION HEADER DETECTION
+  // FIXED: SECTION HEADER DETECTION
   // ============================================
 
   private detectSectionHeader(line: string): string | null {
     const trimmed = line.trim();
     if (!trimmed || trimmed.length > 80) return null;
 
-    // Remove numbering like "1.", "2.", "3."
     const cleaned = trimmed.replace(/^[\dIVXivx]{1,4}[.)]\s*/, '').trim();
     if (!cleaned) return null;
 
-    // Check each section type
-    for (const [key, patterns] of Object.entries(UNIVERSAL_SECTION_PATTERNS)) {
-      for (const pattern of patterns) {
-        if (pattern.test(cleaned) || pattern.test(cleaned.toUpperCase())) {
-          // For ALL CAPS headers, prioritize
-          if (cleaned === cleaned.toUpperCase() && cleaned.length > 5) {
-            return key;
-          }
-          return key;
-        }
+    const upperCleaned = cleaned.toUpperCase();
+    
+    // Common header mappings - prioritize these
+    const exactHeaders: Record<string, string> = {
+      'PROFESSIONAL SUMMARY': 'summary',
+      'CAREER SUMMARY': 'summary',
+      'EXECUTIVE SUMMARY': 'summary',
+      'SUMMARY': 'summary',
+      'PROFILE': 'summary',
+      'PROFESSIONAL PROFILE': 'summary',
+      'CAREER PROFILE': 'summary',
+      'ABOUT ME': 'summary',
+      'OBJECTIVE': 'summary',
+      'CAREER OBJECTIVE': 'summary',
+      
+      'WORK EXPERIENCE': 'experience',
+      'PROFESSIONAL EXPERIENCE': 'experience',
+      'EMPLOYMENT HISTORY': 'experience',
+      'EMPLOYMENT': 'experience',
+      'WORK HISTORY': 'experience',
+      'CAREER HISTORY': 'experience',
+      'EXPERIENCE': 'experience',
+      
+      'CORE COMPETENCIES': 'skills',
+      'TECHNICAL SKILLS': 'skills',
+      'SKILLS': 'skills',
+      'PROFESSIONAL SKILLS': 'skills',
+      'COMPETENCIES': 'skills',
+      'TECHNICAL PROFILE': 'skills',
+      'TECHNICAL PROFILE & TOOLS': 'skills',
+      
+      'EDUCATION': 'education',
+      'EDUCATIONAL BACKGROUND': 'education',
+      'ACADEMIC BACKGROUND': 'education',
+      'EDUCATION & CREDENTIALS': 'education',
+      'ACADEMIC QUALIFICATIONS': 'education',
+      'CERTIFICATIONS': 'certifications',
+      'LICENSES': 'certifications',
+      
+      'PROJECTS': 'projects',
+      'KEY PROJECTS': 'projects',
+      'PROJECT EXPERIENCE': 'projects',
+      'PORTFOLIO': 'projects',
+      
+      'LANGUAGES': 'languages',
+      'LANGUAGE SKILLS': 'languages',
+      
+      'REFERENCES': 'references',
+      'AWARDS': 'awards',
+      'PUBLICATIONS': 'publications',
+      'VOLUNTEER': 'volunteer',
+      'VOLUNTEER EXPERIENCE': 'volunteer',
+    };
+
+    // Check exact header match
+    for (const [header, key] of Object.entries(exactHeaders)) {
+      if (upperCleaned === header || upperCleaned.includes(header)) {
+        return key;
+      }
+      if (upperCleaned.startsWith(header) || upperCleaned.startsWith(header + ':')) {
+        return key;
       }
     }
 
-    // Check for common variations not caught by patterns
-    const upperCleaned = cleaned.toUpperCase();
-    const commonHeaders: Record<string, string> = {
-      'PROFESSIONAL SUMMARY': 'summary',
-      'CAREER SUMMARY': 'summary',
-      'WORK EXPERIENCE': 'experience',
-      'EMPLOYMENT HISTORY': 'experience',
-      'CORE COMPETENCIES': 'skills',
-      'TECHNICAL SKILLS': 'skills',
-      'EDUCATION & CREDENTIALS': 'education',
-      'ACADEMIC BACKGROUND': 'education',
-      'PROFESSIONAL PROFILE': 'summary',
-      'TECHNICAL PROFILE': 'skills',
-      'TECHNICAL PROFILE & TOOLS': 'skills',
-    };
-
-    for (const [header, key] of Object.entries(commonHeaders)) {
-      if (upperCleaned.includes(header) || header.includes(upperCleaned)) {
-        return key;
+    // Check against all patterns
+    for (const [key, patterns] of Object.entries(UNIVERSAL_SECTION_PATTERNS)) {
+      for (const pattern of patterns) {
+        if (pattern.test(cleaned) || pattern.test(upperCleaned)) {
+          return key;
+        }
       }
     }
 
@@ -776,12 +805,10 @@ class ResumeParser {
         continue;
       }
 
-      // Check if this line might be a section header
       const isAllCaps = trimmed === trimmed.toUpperCase() && trimmed.length > 3;
       const isShort = trimmed.length < 50;
 
       if (isAllCaps && isShort) {
-        // Save previous section
         if (currentContent.length > 0) {
           const content = currentContent.join('\n').trim();
           if (content) {
@@ -791,7 +818,6 @@ class ResumeParser {
           }
         }
 
-        // Start new section
         const matchedKey = this.detectSectionHeader(trimmed);
         currentSection = matchedKey || 'unknown_' + trimmed;
         currentContent = [];
@@ -800,7 +826,6 @@ class ResumeParser {
       }
     }
 
-    // Save last section
     if (currentContent.length > 0) {
       const content = currentContent.join('\n').trim();
       if (content) {
@@ -820,7 +845,6 @@ class ResumeParser {
   private htmlToStructuredText(html: string): string {
     let text = html;
 
-    // Tables
     text = text.replace(/<table[^>]*>/gi, '\n');
     text = text.replace(/<\/table>/gi, '\n');
     text = text.replace(/<tr[^>]*>/gi, '');
@@ -830,7 +854,6 @@ class ResumeParser {
     text = text.replace(/<th[^>]*>/gi, '');
     text = text.replace(/<\/th>/gi, ' ');
 
-    // Lists
     text = text.replace(/<ul[^>]*>/gi, '\n');
     text = text.replace(/<\/ul>/gi, '');
     text = text.replace(/<ol[^>]*>/gi, '\n');
@@ -838,18 +861,15 @@ class ResumeParser {
     text = text.replace(/<li[^>]*>/gi, '\n• ');
     text = text.replace(/<\/li>/gi, '');
 
-    // Headings
     text = text.replace(/<h[1-6][^>]*>/gi, '\n\n');
     text = text.replace(/<\/h[1-6]>/gi, '\n');
 
-    // Paragraphs
     text = text.replace(/<p[^>]*>/gi, '');
     text = text.replace(/<\/p>/gi, '\n');
     text = text.replace(/<br\s*\/?>/gi, '\n');
     text = text.replace(/<div[^>]*>/gi, '');
     text = text.replace(/<\/div>/gi, '\n');
 
-    // Inline
     text = text.replace(/<span[^>]*>/gi, '');
     text = text.replace(/<\/span>/gi, '');
     text = text.replace(/<strong[^>]*>/gi, '');
@@ -863,7 +883,6 @@ class ResumeParser {
     text = text.replace(/<u[^>]*>/gi, '');
     text = text.replace(/<\/u>/gi, '');
 
-    // Special characters
     text = text
       .replace(/&nbsp;/g, ' ')
       .replace(/&amp;/g, '&')
@@ -878,10 +897,8 @@ class ResumeParser {
       .replace(/&copy;/g, '©')
       .replace(/&trade;/g, '™');
 
-    // Remove remaining HTML
     text = text.replace(/<[^>]+>/g, '');
 
-    // Normalize whitespace
     text = text
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
@@ -899,19 +916,15 @@ class ResumeParser {
   private postProcessResumeText(text: string): string {
     let result = text;
 
-    // Fix hyphenated words
     result = result.replace(/([a-zA-Z])-\s+([a-zA-Z])/g, '$1-$2');
     result = result.replace(/([a-zA-Z])-\s*([a-zA-Z])/g, '$1-$2');
 
-    // Fix bullet points
     result = result.replace(/^\s*[-–—]\s*/gm, '• ');
     result = result.replace(/^\s*\*\s*/gm, '• ');
     result = result.replace(/^\s*[•●○▪▫]\s*/gm, '• ');
 
-    // Fix numbered lists
     result = result.replace(/^(\d+)[.)]\s*(.+)$/gm, '• $2');
 
-    // Clean up
     result = result
       .replace(/\n{4,}/g, '\n\n')
       .replace(/^[ \t]+/gm, '')
@@ -930,13 +943,11 @@ class ResumeParser {
   ): Partial<ResumeSections> {
     const sections: Partial<ResumeSections> = {};
 
-    // Extract contact from header or first page
     const headerText = detectedSections['contact'] || 
                        detectedSections['header'] || 
                        fullText.split('\n').slice(0, 20).join('\n');
     sections.contact = this.extractContactAdvanced(headerText);
 
-    // Summary
     const summaryText = detectedSections['summary'] || '';
     sections.summary = {
       content: summaryText || this.extractSummaryAdvanced(headerText),
@@ -944,46 +955,45 @@ class ResumeParser {
       lastModified: new Date().toISOString(),
       versions: [],
       keywordDensity: {},
-      characterCount: summaryText.length,
-      wordCount: summaryText.split(/\s+/).length,
+      characterCount: summaryText.length || 0,
+      wordCount: summaryText.split(/\s+/).length || 0,
     };
 
-    // Experience
     sections.experience = detectedSections['experience']
       ? this.extractExperienceAdvanced(detectedSections['experience'])
       : [];
 
-    // Education
     sections.education = detectedSections['education']
       ? this.extractEducationAdvanced(detectedSections['education'])
       : [];
 
-    // Skills
     const skillsText = detectedSections['skills'] || '';
     sections.skills = skillsText
       ? this.extractSkillsAdvanced(skillsText)
       : this.extractSkillsAdvanced(fullText);
 
-    // Projects
     sections.projects = detectedSections['projects']
       ? this.extractProjectsAdvanced(detectedSections['projects'])
       : [];
 
-    // Certifications
     sections.certifications = detectedSections['certifications']
       ? this.extractCertificationsAdvanced(detectedSections['certifications'])
       : [];
 
-    // Languages
     const languagesText = detectedSections['languages'] || '';
     sections.languages = languagesText
       ? this.extractLanguagesAdvanced(languagesText)
       : this.extractLanguagesAdvanced(fullText);
 
-    // Initialize empty arrays
-    sections.volunteer = [];
-    sections.publications = [];
-    sections.awards = [];
+    sections.volunteer = detectedSections['volunteer']
+      ? this.extractVolunteerAdvanced(detectedSections['volunteer'])
+      : [];
+    sections.publications = detectedSections['publications']
+      ? this.extractPublicationsAdvanced(detectedSections['publications'])
+      : [];
+    sections.awards = detectedSections['awards']
+      ? this.extractAwardsAdvanced(detectedSections['awards'])
+      : [];
     sections.customSections = [];
     sections.professionalAffiliations = [];
     sections.conferences = [];
@@ -991,6 +1001,84 @@ class ResumeParser {
     sections.references = [];
 
     return sections;
+  }
+
+  // ============================================
+  // ADDED: HELPER EXTRACTION METHODS
+  // ============================================
+
+  private extractVolunteerAdvanced(text: string): Volunteer[] {
+    const volunteer: Volunteer[] = [];
+    const lines = text.split('\n').filter(l => l.trim());
+    
+    for (const line of lines) {
+      const clean = line.replace(/^[•\-*○]\s*/, '').trim();
+      if (clean.length > 5) {
+        volunteer.push({
+          id: uuidv4(),
+          organization: clean.substring(0, 50),
+          role: '',
+          startDate: '',
+          endDate: '',
+          current: false,
+          description: clean,
+          achievements: [],
+          cause: [],
+          hoursPerWeek: 0,
+        });
+      }
+    }
+    
+    return volunteer.slice(0, 5);
+  }
+
+  private extractPublicationsAdvanced(text: string): Publication[] {
+    const publications: Publication[] = [];
+    const lines = text.split('\n').filter(l => l.trim());
+    
+    for (const line of lines) {
+      const clean = line.replace(/^[•\-*○]\s*/, '').trim();
+      if (clean.length > 10) {
+        publications.push({
+          id: uuidv4(),
+          title: clean.substring(0, 50),
+          publisher: '',
+          date: '',
+          description: clean,
+          coAuthors: [],
+          journalName: '',
+          volume: '',
+          pages: '',
+          citations: 0,
+          impactFactor: 0,
+          peerReviewed: false,
+        });
+      }
+    }
+    
+    return publications.slice(0, 5);
+  }
+
+  private extractAwardsAdvanced(text: string): Award[] {
+    const awards: Award[] = [];
+    const lines = text.split('\n').filter(l => l.trim());
+    
+    for (const line of lines) {
+      const clean = line.replace(/^[•\-*○]\s*/, '').trim();
+      if (clean.length > 5) {
+        awards.push({
+          id: uuidv4(),
+          title: clean.substring(0, 50),
+          issuer: '',
+          date: '',
+          description: clean,
+          category: '',
+          level: 'Local',
+        });
+      }
+    }
+    
+    return awards.slice(0, 5);
   }
 
   // ============================================
@@ -1004,16 +1092,9 @@ class ResumeParser {
     templateType?: string;
   }> {
     try {
-      // Extract features for ML
       const features = this.extractFeaturesForML(text);
-      
-      // Get predictions from ML model
       const mlResult = await this.mlCore.predict(text, features);
-      
-      // Merge with rule-based parsing
       const ruleBased = this.ruleBasedParse(text);
-      
-      // Combine results with confidence weighting
       const merged = this.mergeParsingResults(ruleBased, mlResult.sections);
       
       return {
@@ -1247,7 +1328,7 @@ class ResumeParser {
   }
 
   // ============================================
-  // SECTION SPLITTING (Original)
+  // SECTION SPLITTING (Original - kept for fallback)
   // ============================================
 
   private matchHeader(rawLine: string): string | null {
@@ -1300,7 +1381,7 @@ class ResumeParser {
   }
 
   // ============================================
-  // BUILD SECTIONS (Original)
+  // BUILD SECTIONS (Original - kept for fallback)
   // ============================================
 
   private buildSectionsFromForcedSplit(forcedSections: Record<string, string>, fullText: string): Partial<ResumeSections> {
