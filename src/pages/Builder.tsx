@@ -294,16 +294,16 @@ const Builder: React.FC = () => {
       
       // Show appropriate toast message based on confidence
       if (confidence > 0.8) {
-        toast.success(`✅ Auto-populated with high confidence! ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
-      } else if (confidence > 0.6) {
-        toast.success(`📝 Auto-populated with medium confidence. ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
-        toast.info('💡 Review suggested corrections below', { duration: 5000 });
-        setShowMLSuggestions(true);
-      } else {
-        toast.warning(`⚠️ Low confidence parse. Please review and correct.`);
-        toast.info('💡 Use AI suggestions to improve parsing', { duration: 5000 });
-        setShowMLSuggestions(true);
-      }
+  toast.success(`✅ Auto-populated with high confidence! ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
+} else if (confidence > 0.6) {
+  toast.success(`📝 Auto-populated with medium confidence. ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
+  toast('💡 Review suggested corrections below', { duration: 5000 }); // FIXED: Changed from toast.info to toast
+  setShowMLSuggestions(true);
+} else {
+  toast.warning(`⚠️ Low confidence parse. Please review and correct.`);
+  toast('💡 Use AI suggestions to improve parsing', { duration: 5000 }); // FIXED: Changed from toast.info to toast
+  setShowMLSuggestions(true);
+}
 
       // Show suggestions if there are any
       if (suggestions.length > 0) {
