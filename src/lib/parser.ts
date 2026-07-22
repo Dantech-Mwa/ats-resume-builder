@@ -3,13 +3,29 @@
 // WORLD-CLASS PROFESSIONAL RESUME PARSER
 // Beats Workday, BambooHR, Lever, Indeed Parsing
 // ============================================
-//
-// Enhanced with Machine Learning capabilities for continuous improvement
-// and intelligent template adaptation
 
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
-import { ResumeSections, ContactInfo, WorkExperience, Education, Skill } from '../lib/types';
+import { 
+  ResumeSections, 
+  ContactInfo, 
+  WorkExperience, 
+  Education, 
+  Skill,
+  SkillsSection,
+  ProfessionalSummary,
+  Certification,
+  Project,
+  Language,
+  Volunteer,
+  Publication,
+  Award,
+  CustomSection,
+  ProfessionalAffiliation,
+  Conference,
+  Patent,
+  Reference
+} from '../lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
 // ============================================
@@ -395,7 +411,7 @@ class ResumeParser {
   }
 
   // ============================================
-  // RESULT MERGING & SUGGESTIONS
+  // RESULT MERGING & SUGGESTIONS - FIXED
   // ============================================
 
   private mergeParsingResults(
@@ -404,17 +420,24 @@ class ResumeParser {
   ): Partial<ResumeSections> {
     const merged: Partial<ResumeSections> = {};
 
-    // Merge each section with preference for ML results where available
-    const sections = ['contact', 'summary', 'experience', 'education', 'skills', 'projects', 'certifications', 'languages'];
+    // Define sections with their types for proper assignment
+    const sectionKeys: (keyof ResumeSections)[] = [
+      'contact', 'summary', 'experience', 'education', 'skills', 
+      'projects', 'certifications', 'languages', 'volunteer', 
+      'publications', 'awards', 'customSections',
+      'professionalAffiliations', 'conferences', 'patents', 'references'
+    ];
     
-    for (const section of sections) {
-      const ruleSection = ruleBased[section as keyof ResumeSections];
-      const mlSection = mlBased[section as keyof ResumeSections];
+    for (const section of sectionKeys) {
+      const ruleSection = ruleBased[section];
+      const mlSection = mlBased[section];
       
-      if (mlSection && this.isValidSection(mlSection)) {
-        merged[section as keyof ResumeSections] = mlSection;
-      } else if (ruleSection && this.isValidSection(ruleSection)) {
-        merged[section as keyof ResumeSections] = ruleSection;
+      // Type-safe assignment with proper checking
+      if (this.isValidSection(mlSection)) {
+        // Use type assertion with proper checking
+        merged[section] = mlSection as any;
+      } else if (this.isValidSection(ruleSection)) {
+        merged[section] = ruleSection as any;
       }
     }
 
@@ -422,16 +445,19 @@ class ResumeParser {
   }
 
   private isValidSection(section: any): boolean {
-    if (!section) return false;
+    if (section === undefined || section === null) return false;
     
+    // Check for empty arrays
     if (Array.isArray(section)) {
       return section.length > 0;
     }
     
+    // Check for empty objects
     if (typeof section === 'object') {
       return Object.keys(section).length > 0;
     }
     
+    // For other types (string, number, etc.)
     return Boolean(section);
   }
 
@@ -692,6 +718,10 @@ class ResumeParser {
       content: forcedSections['summary'] || this.extractSummaryAdvanced(headerText),
       aiOptimized: false,
       lastModified: new Date().toISOString(),
+      versions: [],
+      keywordDensity: {},
+      characterCount: 0,
+      wordCount: 0,
     };
     sections.experience = forcedSections['experience']
       ? this.extractExperienceAdvanced(forcedSections['experience'])
@@ -711,6 +741,16 @@ class ResumeParser {
     sections.languages = forcedSections['languages']
       ? this.extractLanguagesAdvanced(forcedSections['languages'])
       : this.extractLanguagesAdvanced(fullText);
+    
+    // Initialize empty arrays for sections that might not be parsed
+    sections.volunteer = [];
+    sections.publications = [];
+    sections.awards = [];
+    sections.customSections = [];
+    sections.professionalAffiliations = [];
+    sections.conferences = [];
+    sections.patents = [];
+    sections.references = [];
 
     return sections;
   }
@@ -721,7 +761,11 @@ class ResumeParser {
 
   private extractContactAdvanced(text: string): ContactInfo {
     const contact: ContactInfo = {
-      fullName: '', email: '', phone: '', location: '', country: '',
+      fullName: '', 
+      email: '', 
+      phone: '', 
+      location: '', 
+      country: '',
     };
 
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -951,6 +995,13 @@ class ResumeParser {
       achievements: achievements.slice(0, 25),
       technologies: [],
       aiSuggestions: [],
+      industry: '',
+      companyType: 'Large Enterprise',
+      employmentType: 'Full-time',
+      durationYears: 0,
+      skillsGained: [],
+      promotions: [],
+      projects: [],
     };
   }
 
@@ -1030,6 +1081,12 @@ class ResumeParser {
           honors: [],
           activities: [],
           relevantCourses: [],
+          location: '',
+          degreeType: 'Bachelor',
+          achievements: [],
+          researchTopics: [],
+          thesisTitle: '',
+          advisor: '',
         });
       }
     }
@@ -1041,14 +1098,20 @@ class ResumeParser {
   // SKILLS EXTRACTION - ADVANCED
   // ============================================
 
-  private extractSkillsAdvanced(text: string): any {
+  private extractSkillsAdvanced(text: string): SkillsSection {
     const technical: Skill[] = [];
     const soft: Skill[] = [];
     const tools: Skill[] = [];
     const other: Skill[] = [];
+    const frameworks: Skill[] = [];
+    const databases: Skill[] = [];
+    const cloudPlatforms: Skill[] = [];
 
     if (!text.trim()) {
-      return { technical: [], soft: [], languages: [], tools: [], other: [] };
+      return { 
+        technical: [], soft: [], languages: [], tools: [], other: [],
+        frameworks: [], databases: [], cloudPlatforms: []
+      };
     }
 
     const techKeywords = [
@@ -1085,13 +1148,13 @@ class ResumeParser {
 
       const lower = skill.toLowerCase();
       if (softKeywords.some(k => lower.includes(k))) {
-        soft.push({ name: skill, level: 'Intermediate', category: 'Soft Skills' });
+        soft.push({ name: skill, level: 'Intermediate', category: 'Soft Skills', selfRated: 3 });
       } else if (toolKeywords.some(k => lower.includes(k))) {
-        tools.push({ name: skill, level: 'Intermediate', category: 'Tools' });
+        tools.push({ name: skill, level: 'Intermediate', category: 'Tools', selfRated: 3 });
       } else if (techKeywords.some(k => lower.includes(k)) || /^[A-Za-z0-9#+.\s\-/]+$/.test(skill)) {
-        technical.push({ name: skill, level: 'Intermediate', category: 'Technical' });
+        technical.push({ name: skill, level: 'Intermediate', category: 'Technical', selfRated: 3 });
       } else {
-        other.push({ name: skill, level: 'Intermediate', category: 'Other' });
+        other.push({ name: skill, level: 'Intermediate', category: 'Other', selfRated: 3 });
       }
     };
 
@@ -1121,6 +1184,9 @@ class ResumeParser {
       languages: [],
       tools: dedupe(tools).slice(0, 20),
       other: dedupe(other).slice(0, 20),
+      frameworks: [],
+      databases: [],
+      cloudPlatforms: [],
     };
   }
 
@@ -1128,8 +1194,8 @@ class ResumeParser {
   // PROJECTS EXTRACTION - ADVANCED
   // ============================================
 
-  private extractProjectsAdvanced(text: string): any[] {
-    const projects: any[] = [];
+  private extractProjectsAdvanced(text: string): Project[] {
+    const projects: Project[] = [];
     if (!text.trim()) return projects;
 
     let blocks = text.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
@@ -1177,6 +1243,9 @@ class ResumeParser {
         current: false,
         startDate: '',
         endDate: '',
+        problemSolved: '',
+        impactMetrics: [],
+        featured: false,
       });
     }
 
@@ -1187,8 +1256,8 @@ class ResumeParser {
   // CERTIFICATIONS EXTRACTION - ADVANCED
   // ============================================
 
-  private extractCertificationsAdvanced(text: string): any[] {
-    const certs: any[] = [];
+  private extractCertificationsAdvanced(text: string): Certification[] {
+    const certs: Certification[] = [];
     if (!text.trim()) return certs;
 
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -1215,6 +1284,9 @@ class ResumeParser {
           issuer,
           date: '',
           inProgress: /in progress|ongoing|pursuing/i.test(clean),
+          skillsValidated: [],
+          annualRenewal: false,
+          isActive: true,
         });
       }
     }
@@ -1226,8 +1298,8 @@ class ResumeParser {
   // LANGUAGES EXTRACTION - ADVANCED
   // ============================================
 
-  private extractLanguagesAdvanced(text: string): any[] {
-    const languages: any[] = [];
+  private extractLanguagesAdvanced(text: string): Language[] {
+    const languages: Language[] = [];
     const languageNames = [
       'English', 'Spanish', 'French', 'German', 'Chinese', 'Mandarin', 'Cantonese',
       'Japanese', 'Korean', 'Arabic', 'Portuguese', 'Russian', 'Italian', 'Dutch',
@@ -1244,7 +1316,11 @@ class ResumeParser {
         const proficiency = match[1] || 'Intermediate';
         languages.push({
           name: lang,
-          proficiency: this.mapProficiency(proficiency),
+          proficiency: this.mapProficiency(proficiency) as any,
+          readingLevel: this.mapProficiency(proficiency) as any,
+          writingLevel: this.mapProficiency(proficiency) as any,
+          speakingLevel: this.mapProficiency(proficiency) as any,
+          listeningLevel: this.mapProficiency(proficiency) as any,
         });
       }
     }
