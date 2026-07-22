@@ -1060,26 +1060,25 @@ class ResumeParser {
   }
 
   private extractAwardsAdvanced(text: string): Award[] {
-    const awards: Award[] = [];
-    const lines = text.split('\n').filter(l => l.trim());
-    
-    for (const line of lines) {
-      const clean = line.replace(/^[•\-*○]\s*/, '').trim();
-      if (clean.length > 5) {
-        awards.push({
-          id: uuidv4(),
-          title: clean.substring(0, 50),
-          issuer: '',
-          date: '',
-          description: clean,
-          category: '',
-          level: 'Local',
-        });
-      }
+  const awards: Award[] = [];
+  const lines = text.split('\n').filter(l => l.trim());
+  
+  for (const line of lines) {
+    const clean = line.replace(/^[•\-*○]\s*/, '').trim();
+    if (clean.length > 5) {
+      awards.push({
+        id: uuidv4(),
+        title: clean.substring(0, 50),
+        issuer: '',
+        date: '',
+        description: clean,
+        category: '',
+      });
     }
-    
-    return awards.slice(0, 5);
   }
+  
+  return awards.slice(0, 5);
+}
 
   // ============================================
   // ML-ENHANCED PARSING
