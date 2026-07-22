@@ -1,9 +1,9 @@
 // ============================================
-// APP COMPONENT - Main Application with Routing
+// APP COMPONENT - Fixed for GitHub Pages
 // ============================================
 
 import React, { useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -27,7 +27,7 @@ const PageLoader = () => (
 );
 
 const App: React.FC = () => {
-  const { user, isAuthenticated, login, logout, setAuthLoading } = useAuth();
+  const { user, isAuthenticated, login, setAuthLoading } = useAuth();
   const { ui } = useUI();
 
   // Check auth state on mount
@@ -136,13 +136,7 @@ const App: React.FC = () => {
               <div className="container-custom py-16">
                 <h1 className="section-heading">Privacy Policy</h1>
                 <div className="prose max-w-3xl mt-8">
-                  <p>Your privacy is important to us. This policy outlines how we collect, use, and protect your personal information.</p>
-                  <h2>Information Collection</h2>
-                  <p>We collect information you provide when creating an account, including your name, email address, and resume content.</p>
-                  <h2>Data Usage</h2>
-                  <p>Your data is used solely to provide and improve our resume building services. We do not sell or share your personal information.</p>
-                  <h2>Data Protection</h2>
-                  <p>We implement industry-standard security measures to protect your data. All data is encrypted in transit and at rest.</p>
+                  <p>Your privacy is important to us.</p>
                 </div>
               </div>
             } />
@@ -150,13 +144,7 @@ const App: React.FC = () => {
               <div className="container-custom py-16">
                 <h1 className="section-heading">Terms of Service</h1>
                 <div className="prose max-w-3xl mt-8">
-                  <p>By using ATS Resume Builder, you agree to these terms of service.</p>
-                  <h2>Service Usage</h2>
-                  <p>You may use our service to create and download resumes. You retain all rights to your resume content.</p>
-                  <h2>Subscription</h2>
-                  <p>Paid features require an active subscription. You may cancel at any time.</p>
-                  <h2>Limitations</h2>
-                  <p>We reserve the right to modify or discontinue services with reasonable notice.</p>
+                  <p>By using ATS Resume Builder, you agree to these terms.</p>
                 </div>
               </div>
             } />
