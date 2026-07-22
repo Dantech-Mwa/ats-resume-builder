@@ -1,12 +1,16 @@
+// src/pages/Builder.tsx
 // ============================================
-// BUILDER PAGE - Perfect Auto-Populate
+// BUILDER PAGE - Perfect Auto-Populate with ML
+// Enhanced with ML parser for intelligent resume parsing
 // ============================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   MdSave, MdDownload, MdPictureAsPdf, MdDescription,
   MdTextSnippet, MdAutoAwesome, MdCloudUpload,
+  MdAnalytics, MdLightbulb, MdHistory, MdTrendingUp,
+  MdWarning, MdCheckCircle, MdSettings,
 } from 'react-icons/md';
 import { useResume, useAI, useExport } from '../store';
 import ResumeEditor from '../components/ResumeEditor';
@@ -16,7 +20,39 @@ import Loading from '../components/Loading';
 import ResumeParser from '../lib/parser';
 import AIService from '../lib/ai';
 import ResumeGenerator from '../lib/generator';
+import { MLResumeParser, TrainingExample, ParsingSuggestion } from '../lib/ml/MLResumeParser';
 import toast from 'react-hot-toast';
+
+// ============================================
+// TYPES
+// ============================================
+
+interface MLParseResult {
+  sections: any;
+  confidence: number;
+  suggestions: ParsingSuggestion[];
+  templateType: string;
+  requiresReview: boolean;
+  detectedProfession?: {
+    title: string;
+    industry: string;
+    confidence: number;
+    seniority: string;
+  };
+}
+
+interface ParserStats {
+  totalParses: number;
+  correctionHistoryCount: number;
+  averageConfidence: number;
+  commonErrors: string[];
+  templateTypes: Record<string, number>;
+  cacheSize: number;
+}
+
+// ============================================
+// BUILDER COMPONENT
+// ============================================
 
 const Builder: React.FC = () => {
   const navigate = useNavigate();
@@ -25,18 +61,62 @@ const Builder: React.FC = () => {
   const { atsScore, setATSScore, setAIRecommendations, setAILoading, aiLoading } = useAI();
   const { setExportLoading } = useExport();
 
+  // State
   const [showExport, setShowExport] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [showMLSuggestions, setShowMLSuggestions] = useState(false);
+  const [showTrainingPanel, setShowTrainingPanel] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
+  const [mlSuggestions, setMLSuggestions] = useState<ParsingSuggestion[]>([]);
+  const [mlConfidence, setMLConfidence] = useState<number>(0);
+  const [parseHistory, setParseHistory] = useState<any[]>([]);
+  const [parserStats, setParserStats] = useState<ParserStats | null>(null);
+  const [isTraining, setIsTraining] = useState(false);
+  const [autoLearn, setAutoLearn] = useState(true);
+  
   const isUpload = searchParams.get('upload') === 'true';
 
-  useEffect(() => { const t = setTimeout(() => setPageLoaded(true), 500); return () => clearTimeout(t); }, []);
-  useEffect(() => { if (isUpload) setShowUpload(true); }, [isUpload]);
-  useEffect(() => { if (!currentResume && pageLoaded) createNewResume('My Resume'); }, [currentResume, pageLoaded, createNewResume]);
+  // ============================================
+  // LIFECYCLE EFFECTS
+  // ============================================
+
+  useEffect(() => {
+    const t = setTimeout(() => setPageLoaded(true), 500);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (isUpload) setShowUpload(true);
+  }, [isUpload]);
+
+  useEffect(() => {
+    if (!currentResume && pageLoaded) {
+      createNewResume('My Resume');
+    }
+  }, [currentResume, pageLoaded, createNewResume]);
+
+  useEffect(() => {
+    // Load parser stats on mount
+    loadParserStats();
+  }, []);
 
   // ============================================
-  // FILE UPLOAD - PERFECT AUTO-POPULATE
+  // PARSER STATS
+  // ============================================
+
+  const loadParserStats = async () => {
+    try {
+      const parser = ResumeParser.getInstance();
+      const stats = parser.getParserStats();
+      setParserStats(stats);
+    } catch (error) {
+      console.warn('Failed to load parser stats:', error);
+    }
+  };
+
+  // ============================================
+  // FILE UPLOAD - ML-ENHANCED AUTO-POPULATE
   // ============================================
 
   const handleFileUpload = async (file: File) => {
@@ -45,6 +125,9 @@ const Builder: React.FC = () => {
 
     try {
       const parser = ResumeParser.getInstance();
+      const aiService = AIService.getInstance();
+
+      // Parse with ML
       const result = await parser.parseFile(file);
 
       if (!result.success) {
@@ -54,8 +137,16 @@ const Builder: React.FC = () => {
       }
 
       const parsed = result.parsed;
+      const confidence = result.confidence || 0;
+      const suggestions = result.suggestions || [];
+      const templateType = result.templateType || 'unknown';
+      const requiresReview = result.requiresReview || false;
 
-      console.log('📦 PARSED SECTIONS:');
+      // Log parsed data for debugging
+      console.log('📦 ML PARSED SECTIONS:');
+      console.log('  Confidence:', Math.round(confidence * 100) + '%');
+      console.log('  Template:', templateType);
+      console.log('  Requires Review:', requiresReview);
       console.log('  Contact:', parsed.contact?.fullName, parsed.contact?.email);
       console.log('  Summary:', parsed.summary?.content?.substring(0, 100));
       console.log('  Experience:', parsed.experience?.length, 'entries');
@@ -65,8 +156,13 @@ const Builder: React.FC = () => {
       console.log('  Projects:', parsed.projects?.length);
       console.log('  Certifications:', parsed.certifications?.length);
       console.log('  Languages:', parsed.languages?.length);
+      console.log('  Suggestions:', suggestions.length);
 
-      // BUILD COMPLETE RESUME OBJECT
+      // Store ML suggestions for display
+      setMLSuggestions(suggestions);
+      setMLConfidence(confidence);
+
+      // BUILD COMPLETE RESUME OBJECT FROM PARSED DATA
       const fullResume = {
         ...currentResume!,
         sections: {
@@ -181,7 +277,11 @@ const Builder: React.FC = () => {
         metadata: {
           ...currentResume!.metadata,
           updatedAt: new Date().toISOString(),
-          completeness: 80,
+          completeness: confidence > 0.8 ? 90 : confidence > 0.6 ? 80 : 70,
+          parsedWith: 'ml',
+          parsedConfidence: confidence,
+          templateType: templateType,
+          requiresReview: requiresReview,
         },
       };
 
@@ -192,14 +292,128 @@ const Builder: React.FC = () => {
       const eduCount = parsed.education?.length || 0;
       const skillCount = (parsed.skills?.technical?.length || 0) + (parsed.skills?.soft?.length || 0);
       
-      toast.success(`Populated: ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
+      // Show appropriate toast message based on confidence
+      if (confidence > 0.8) {
+        toast.success(`✅ Auto-populated with high confidence! ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
+      } else if (confidence > 0.6) {
+        toast.success(`📝 Auto-populated with medium confidence. ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
+        toast.info('💡 Review suggested corrections below', { duration: 5000 });
+        setShowMLSuggestions(true);
+      } else {
+        toast.warning(`⚠️ Low confidence parse. Please review and correct.`);
+        toast.info('💡 Use AI suggestions to improve parsing', { duration: 5000 });
+        setShowMLSuggestions(true);
+      }
 
-      // Score the raw text
+      // Show suggestions if there are any
+      if (suggestions.length > 0) {
+        setShowMLSuggestions(true);
+      }
+
+      // Score the raw text with ATS
       await analyzeResume(result.rawText);
+
+      // Auto-learn from successful parse (if confidence is high)
+      if (autoLearn && confidence > 0.7) {
+        await autoLearnFromParse(result, fullResume);
+      }
+
+      // Store parse history
+      setParseHistory(prev => [...prev, {
+        timestamp: new Date().toISOString(),
+        confidence,
+        templateType,
+        sections: Object.keys(parsed).join(', '),
+        suggestions: suggestions.length,
+      }]);
+
+      // Update stats
+      loadParserStats();
+
     } catch (error: any) {
       toast.error('Failed: ' + error.message);
+      console.error('Parse error:', error);
     } finally {
       setParsing(false);
+    }
+  };
+
+  // ============================================
+  // AUTO-LEARN FROM SUCCESSFUL PARSE
+  // ============================================
+
+  const autoLearnFromParse = async (result: any, fullResume: any) => {
+    try {
+      const parser = ResumeParser.getInstance();
+      const trainingExample: TrainingExample = {
+        id: crypto.randomUUID(),
+        rawText: result.rawText,
+        sections: result.parsed,
+        templateType: result.templateType || 'unknown',
+        confidence: result.confidence || 0.5,
+        corrections: result.parsed, // Use parsed data as correction for learning
+        timestamp: new Date().toISOString()
+      };
+      
+      await parser.batchLearnFromCorrections([trainingExample]);
+      console.log('📚 Auto-learned from parse');
+    } catch (error) {
+      console.warn('Auto-learning failed:', error);
+    }
+  };
+
+  // ============================================
+  // HANDLE USER CORRECTION - LEARN FROM USER
+  // ============================================
+
+  const handleUserCorrection = async (correctedSections: any) => {
+    if (!currentResume || !parsing) return;
+
+    try {
+      const parser = ResumeParser.getInstance();
+      const aiService = AIService.getInstance();
+
+      // Learn from correction
+      await parser.learnFromCorrection(
+        currentResume.rawText || '',
+        currentResume.sections,
+        correctedSections,
+        currentResume.metadata.templateType || 'unknown'
+      );
+
+      // Update resume with corrections
+      setCurrentResume({
+        ...currentResume,
+        sections: correctedSections,
+        metadata: {
+          ...currentResume.metadata,
+          updatedAt: new Date().toISOString(),
+          requiresReview: false,
+        }
+      });
+
+      // Update AI service as well
+      await aiService.learnFromCorrection(
+        currentResume.rawText || '',
+        currentResume.sections,
+        correctedSections,
+        currentResume.metadata.templateType || 'unknown'
+      );
+
+      toast.success('✅ Correction learned! The parser will improve over time.');
+
+      // Re-analyze with corrected data
+      await handleReAnalyze();
+
+      // Update stats
+      loadParserStats();
+
+      // Clear suggestions
+      setMLSuggestions([]);
+      setShowMLSuggestions(false);
+
+    } catch (error: any) {
+      toast.error('Failed to learn correction: ' + error.message);
     }
   };
 
@@ -215,9 +429,21 @@ const Builder: React.FC = () => {
       setATSScore(score);
       const recs = await aiService.getRecommendations(resumeText, score);
       setAIRecommendations(recs || []);
-      toast.success(`ATS Score: ${score.overall}/100 - ${recs?.length || 0} tips`);
+      
+      // Show ML-enhanced recommendations
+      const parser = ResumeParser.getInstance();
+      const parserStats = parser.getParserStats();
+      
+      // Toast with ML confidence
+      const mlConfidence = parserStats?.averageConfidence || 0;
+      const confidenceMsg = mlConfidence > 0.7 
+        ? '🎯 ML model confidence: ' + Math.round(mlConfidence * 100) + '%'
+        : '📚 Parser learning: ' + Math.round(mlConfidence * 100) + '% (improving with use)';
+      
+      toast.success(`ATS Score: ${score.overall}/100 - ${recs?.length || 0} tips. ${confidenceMsg}`);
     } catch (error: any) {
       console.error('Analysis error:', error);
+      toast.error('Analysis failed: ' + error.message);
     } finally {
       setAILoading(false);
     }
@@ -279,6 +505,81 @@ const Builder: React.FC = () => {
   };
 
   // ============================================
+  // BATCH TRAINING
+  // ============================================
+
+  const handleBatchTraining = async () => {
+    setIsTraining(true);
+    try {
+      const parser = ResumeParser.getInstance();
+      const aiService = AIService.getInstance();
+      
+      // Get all corrections from history
+      const history = JSON.parse(localStorage.getItem('resumeParserCorrectionHistory') || '[]');
+      
+      if (history.length === 0) {
+        toast.info('No corrections to train on. Parse some resumes first!');
+        return;
+      }
+
+      await parser.batchLearnFromCorrections(history);
+      await aiService.batchLearnFromCorrections(history);
+      
+      toast.success(`✅ Trained on ${history.length} corrections!`);
+      loadParserStats();
+    } catch (error: any) {
+      toast.error('Training failed: ' + error.message);
+    } finally {
+      setIsTraining(false);
+    }
+  };
+
+  // ============================================
+  // EXPORT TRAINING DATA
+  // ============================================
+
+  const handleExportTraining = () => {
+    try {
+      const parser = ResumeParser.getInstance();
+      const data = parser.exportTrainingData();
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `training-data-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Training data exported!');
+    } catch (error: any) {
+      toast.error('Export failed: ' + error.message);
+    }
+  };
+
+  // ============================================
+  // IMPORT TRAINING DATA
+  // ============================================
+
+  const handleImportTraining = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const jsonData = e.target?.result as string;
+        const parser = ResumeParser.getInstance();
+        const success = parser.importTrainingData(jsonData);
+        if (success) {
+          toast.success('Training data imported!');
+          loadParserStats();
+        } else {
+          toast.error('Invalid training data');
+        }
+      } catch (error: any) {
+        toast.error('Import failed: ' + error.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // ============================================
   // EXPORT
   // ============================================
 
@@ -288,14 +589,153 @@ const Builder: React.FC = () => {
     try {
       const gen = ResumeGenerator.getInstance();
       await gen.downloadResume(currentResume, {
-        format: format as any, templateId: currentResume.metadata.templateId,
-        includeAISuggestions: false, includeATSScore: true,
-        pageSize: 'A4', margins: 'normal', fontSize: 'normal',
+        format: format as any, 
+        templateId: currentResume.metadata.templateId,
+        includeAISuggestions: false, 
+        includeATSScore: true,
+        pageSize: 'A4', 
+        margins: 'normal', 
+        fontSize: 'normal',
       });
       toast.success(`Exported as ${format.toUpperCase()}!`);
       setShowExport(false);
-    } catch (e: any) { toast.error(e.message); }
-    finally { setExportLoading(false); }
+    } catch (e: any) { 
+      toast.error(e.message); 
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // ============================================
+  // RENDER ML SUGGESTIONS PANEL
+  // ============================================
+
+  const renderMLSuggestions = () => {
+    if (!showMLSuggestions || mlSuggestions.length === 0) return null;
+
+    return (
+      <div className="fixed bottom-20 right-4 w-96 max-h-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-50">
+        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            <MdLightbulb className="w-5 h-5 text-blue-600" />
+            <span className="text-sm font-semibold text-gray-900">ML Suggestions</span>
+          </div>
+          <button
+            onClick={() => setShowMLSuggestions(false)}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ×
+          </button>
+        </div>
+        <div className="p-4 overflow-y-auto max-h-80">
+          {mlSuggestions.map((suggestion, index) => (
+            <div key={index} className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-start justify-between">
+                <span className="text-xs font-medium text-gray-500">{suggestion.field}</span>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  suggestion.confidence > 0.7 ? 'bg-green-100 text-green-700' :
+                  suggestion.confidence > 0.4 ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-red-100 text-red-700'
+                }`}>
+                  {Math.round(suggestion.confidence * 100)}%
+                </span>
+              </div>
+              <p className="text-sm text-gray-700 mt-1">{suggestion.value}</p>
+              {suggestion.alternativeValues && (
+                <div className="mt-1 text-xs text-gray-500">
+                  Alternatives: {suggestion.alternativeValues.join(', ')}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // RENDER TRAINING PANEL
+  // ============================================
+
+  const renderTrainingPanel = () => {
+    if (!showTrainingPanel) return null;
+
+    return (
+      <div className="fixed bottom-4 left-4 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-50">
+        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            <MdHistory className="w-5 h-5 text-blue-600" />
+            <span className="text-sm font-semibold text-gray-900">Training Center</span>
+          </div>
+          <button
+            onClick={() => setShowTrainingPanel(false)}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ×
+          </button>
+        </div>
+        <div className="p-4 space-y-3">
+          {parserStats && (
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Corrections</span>
+                <span className="font-medium">{parserStats.correctionHistoryCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Avg Confidence</span>
+                <span className="font-medium">{Math.round(parserStats.averageConfidence * 100)}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Cache Size</span>
+                <span className="font-medium">{parserStats.cacheSize}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Templates</span>
+                <span className="font-medium">{Object.keys(parserStats.templateTypes).length}</span>
+              </div>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleBatchTraining}
+              disabled={isTraining}
+              className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isTraining ? 'Training...' : 'Train on Corrections'}
+            </button>
+            <button
+              onClick={handleExportTraining}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              Export
+            </button>
+            <label className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 cursor-pointer">
+              Import
+              <input
+                type="file"
+                accept=".json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImportTraining(file);
+                }}
+                className="hidden"
+              />
+            </label>
+          </div>
+          <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoLearn}
+                onChange={(e) => setAutoLearn(e.target.checked)}
+                className="rounded"
+              />
+              Auto-learn from parses
+            </label>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // ============================================
@@ -303,48 +743,141 @@ const Builder: React.FC = () => {
   // ============================================
 
   if (!pageLoaded || parsing) {
-    return <Loading type="page" text={parsing ? 'Analyzing resume...' : 'Loading...'} fullScreen />;
+    return <Loading type="page" text={parsing ? 'Analyzing resume with ML...' : 'Loading...'} fullScreen />;
   }
 
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col">
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-600 hover:text-gray-900">← Back</button>
+          <button 
+            onClick={() => navigate('/dashboard')} 
+            className="text-sm text-gray-600 hover:text-gray-900"
+          >
+            ← Back
+          </button>
           <div className="w-px h-5 bg-gray-200" />
-          <h1 className="text-sm font-semibold text-gray-900">{currentResume?.metadata.title || 'Untitled'}</h1>
+          <h1 className="text-sm font-semibold text-gray-900">
+            {currentResume?.metadata.title || 'Untitled'}
+          </h1>
           {isDirty && <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" />}
           {aiLoading && <span className="text-xs text-blue-600 animate-pulse">Analyzing...</span>}
+          
+          {/* ML Confidence Badge */}
+          {mlConfidence > 0 && (
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              mlConfidence >= 0.8 ? 'bg-green-100 text-green-700' :
+              mlConfidence >= 0.6 ? 'bg-yellow-100 text-yellow-700' :
+              'bg-red-100 text-red-700'
+            }`}>
+              ML: {Math.round(mlConfidence * 100)}%
+            </span>
+          )}
+          
+          {/* ATS Score Badge */}
           {atsScore && (
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${atsScore.overall >= 80 ? 'bg-green-100 text-green-700' : atsScore.overall >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              atsScore.overall >= 80 ? 'bg-green-100 text-green-700' : 
+              atsScore.overall >= 60 ? 'bg-yellow-100 text-yellow-700' : 
+              'bg-red-100 text-red-700'
+            }`}>
               ATS: {atsScore.overall}/100
             </span>
           )}
         </div>
+        
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowUpload(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"><MdCloudUpload className="w-4 h-4"/> Upload</button>
-          <button onClick={handleReAnalyze} disabled={aiLoading} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg disabled:opacity-50"><MdAutoAwesome className="w-4 h-4"/> {aiLoading?'Analyzing...':'Re-analyze'}</button>
-          <button onClick={saveResume} className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg ${isDirty?'text-blue-600 bg-blue-50 hover:bg-blue-100':'text-gray-400 bg-gray-50 cursor-not-allowed'}`}><MdSave className="w-4 h-4"/> Save</button>
-          <button onClick={() => setShowExport(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"><MdDownload className="w-4 h-4"/> Download</button>
+          <button
+            onClick={() => setShowTrainingPanel(!showTrainingPanel)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+            title="Training Center"
+          >
+            <MdSettings className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setShowUpload(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+          >
+            <MdCloudUpload className="w-4 h-4"/> Upload
+          </button>
+          <button
+            onClick={handleReAnalyze}
+            disabled={aiLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg disabled:opacity-50"
+          >
+            <MdAutoAwesome className="w-4 h-4"/> {aiLoading?'Analyzing...':'Re-analyze'}
+          </button>
+          <button
+            onClick={saveResume}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg ${
+              isDirty ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 bg-gray-50 cursor-not-allowed'
+            }`}
+          >
+            <MdSave className="w-4 h-4"/> Save
+          </button>
+          <button
+            onClick={() => setShowExport(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+          >
+            <MdDownload className="w-4 h-4"/> Download
+          </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden"><ResumeEditor onExport={handleExport} /></div>
+      {/* Main Editor */}
+      <div className="flex-1 overflow-hidden">
+        <ResumeEditor 
+          onExport={handleExport} 
+          onCorrection={handleUserCorrection}
+        />
+      </div>
 
+      {/* Upload Modal */}
       <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload Resume" size="md">
-        <FileUpload onFileSelect={handleFileUpload} label="Upload Resume" description="Upload PDF, DOCX, or TXT. We'll populate all sections automatically." />
+        <FileUpload 
+          onFileSelect={handleFileUpload} 
+          label="Upload Resume" 
+          description="Upload PDF, DOCX, or TXT. ML will automatically populate all sections with intelligent parsing."
+        />
+        {parserStats && parserStats.correctionHistoryCount > 0 && (
+          <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-blue-700">
+            <span className="font-medium">🧠 ML Model:</span> Trained on {parserStats.correctionHistoryCount} corrections. 
+            Confidence: {Math.round(parserStats.averageConfidence * 100)}%
+          </div>
+        )}
       </Modal>
 
+      {/* Export Modal */}
       <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Download" size="sm">
         <div className="space-y-3">
-          {[{format:'pdf',icon:<MdPictureAsPdf/>,label:'PDF',desc:'Best for applications',color:'text-red-600 bg-red-50'},{format:'docx',icon:<MdDescription/>,label:'Word',desc:'Editable',color:'text-blue-600 bg-blue-50'},{format:'txt',icon:<MdTextSnippet/>,label:'Text',desc:'ATS-optimized',color:'text-green-600 bg-green-50'}].map(o=>(
-            <button key={o.format} onClick={()=>handleExport(o.format)} className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50">
-              <div className={`w-10 h-10 ${o.color} rounded-lg flex items-center justify-center`}>{React.cloneElement(o.icon,{className:'w-5 h-5'})}</div>
-              <div className="text-left"><p className="text-sm font-semibold text-gray-900">{o.label}</p><p className="text-xs text-gray-500">{o.desc}</p></div>
+          {[
+            {format:'pdf', icon:<MdPictureAsPdf/>, label:'PDF', desc:'Best for applications', color:'text-red-600 bg-red-50'},
+            {format:'docx', icon:<MdDescription/>, label:'Word', desc:'Editable', color:'text-blue-600 bg-blue-50'},
+            {format:'txt', icon:<MdTextSnippet/>, label:'Text', desc:'ATS-optimized', color:'text-green-600 bg-green-50'}
+          ].map(o => (
+            <button
+              key={o.format}
+              onClick={() => handleExport(o.format)}
+              className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition-colors"
+            >
+              <div className={`w-10 h-10 ${o.color} rounded-lg flex items-center justify-center`}>
+                {React.cloneElement(o.icon, {className:'w-5 h-5'})}
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-gray-900">{o.label}</p>
+                <p className="text-xs text-gray-500">{o.desc}</p>
+              </div>
             </button>
           ))}
         </div>
       </Modal>
+
+      {/* ML Suggestions Panel */}
+      {renderMLSuggestions()}
+
+      {/* Training Panel */}
+      {renderTrainingPanel()}
     </div>
   );
 };
