@@ -215,7 +215,6 @@ export interface Language {
   speakingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
   listeningLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
 }
-
 export interface Volunteer {
   id: string;
   organization: string;
@@ -225,8 +224,10 @@ export interface Volunteer {
   current: boolean;
   description: string;
   achievements: string[];
+  // NEW: Optional fields
+  cause?: string[];
+  hoursPerWeek?: number;
 }
-
 export interface Publication {
   id: string;
   title: string;
@@ -236,6 +237,13 @@ export interface Publication {
   doi?: string;
   description: string;
   coAuthors: string[];
+  // NEW: Optional fields
+  journalName?: string;
+  volume?: string;
+  pages?: string;
+  citations?: number;
+  impactFactor?: number;
+  peerReviewed?: boolean;
 }
 
 export interface Award {
