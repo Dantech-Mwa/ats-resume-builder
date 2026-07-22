@@ -187,8 +187,21 @@ export interface Project {
   current: boolean;
   achievements: string[];
   role: string;
+  // NEW: Fields used by parser.ts
+  problemSolved?: string;
+  impactMetrics?: ImpactMetric[];
+  featured?: boolean;
+  teamSize?: number;
 }
 
+// NEW: Supporting interface for Project
+export interface ImpactMetric {
+  name: string;
+  value: string;
+  description: string;
+  unit: string;
+  comparison?: string;
+}
 export interface Language {
   name: string;
   proficiency: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
