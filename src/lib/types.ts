@@ -70,6 +70,11 @@ export interface ProfessionalSummary {
   content: string;
   aiOptimized: boolean;
   lastModified: string;
+  // NEW: Fields used by parser.ts
+  versions?: any[];
+  keywordDensity?: Record<string, number>;
+  characterCount?: number;
+  wordCount?: number;
 }
 
 export interface WorkExperience {
