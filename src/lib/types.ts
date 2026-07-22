@@ -424,9 +424,8 @@ export interface AIChatMessage {
   timestamp: string;
   suggestions?: string[];
 }
-
 // ============================================
-// TEMPLATE TYPES - Updated
+// TEMPLATE TYPES - Make new properties optional
 // ============================================
 
 export type TemplateCategory = 'professional' | 'creative' | 'academic' | 'executive' | 'modern' | 'simple' | 'technical';
@@ -440,7 +439,7 @@ export interface TemplateColors {
   background: string;
   headingText: string;
   borderColor: string;
-  // NEW: Extended color properties for advanced templates
+  // NEW: Extended color properties for templates (all optional)
   linkColor?: string;
   bulletColor?: string;
   dividerColor?: string;
@@ -504,11 +503,14 @@ export interface TemplateFeature {
   description: string;
 }
 
+// ============================================
+// TEMPLATE CONFIG - Make all new properties optional
+// ============================================
+
 export interface TemplateConfig {
   id: string;
   name: string;
   category: TemplateCategory;
-  style: TemplateStyle;
   description: string;
   previewImage: string;
   colors: TemplateColors;
@@ -518,12 +520,14 @@ export interface TemplateConfig {
   atsCompatibility: number;
   popularity: number;
   isPremium: boolean;
-  isDefault: boolean;
-  tags: string[];
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  features: TemplateFeature[];
+  // NEW: All these properties are now OPTIONAL
+  style?: TemplateStyle;
+  isDefault?: boolean;
+  tags?: string[];
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  features?: TemplateFeature[];
 }
 
 // -------------------------------------------
