@@ -134,6 +134,13 @@ export interface Education {
   honors: string[];
   activities: string[];
   relevantCourses: string[];
+  // NEW: Fields used by parser.ts
+  location?: string;
+  degreeType?: 'Associate' | 'Bachelor' | 'Master' | 'PhD' | 'Certificate' | 'Diploma' | 'High School' | 'Other';
+  achievements?: string[];
+  researchTopics?: string[];
+  thesisTitle?: string;
+  advisor?: string;
 }
 
 export interface Skill {
