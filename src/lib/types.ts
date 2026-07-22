@@ -209,6 +209,11 @@ export interface Language {
   name: string;
   proficiency: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
   certification?: string;
+  // NEW: Fields used by parser.ts
+  readingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
+  writingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
+  speakingLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
+  listeningLevel?: 'Native' | 'Fluent' | 'Advanced' | 'Intermediate' | 'Basic';
 }
 
 export interface Volunteer {
