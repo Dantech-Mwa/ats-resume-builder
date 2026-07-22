@@ -1,4 +1,4 @@
-/ ============================================
+// ============================================
 // ATS RESUME BUILDER - COMPLETE TYPE SYSTEM
 // ============================================
 
@@ -191,6 +191,56 @@ export interface CustomSectionItem {
   bulletPoints: string[];
 }
 
+// ============================================
+// NEW: ADD THESE TYPES (for ML Parser)
+// ============================================
+
+export interface ProfessionalAffiliation {
+  id: string;
+  name: string;
+  role: string;
+  membershipType: string;
+  startDate: string;
+  endDate?: string;
+  current: boolean;
+}
+
+export interface Conference {
+  id: string;
+  name: string;
+  location: string;
+  date: string;
+  role: 'Attendee' | 'Speaker' | 'Organizer' | 'Panelist';
+  topic: string;
+  link?: string;
+}
+
+export interface Patent {
+  id: string;
+  title: string;
+  number: string;
+  date: string;
+  status: 'Filed' | 'Pending' | 'Granted';
+  description: string;
+  inventors: string[];
+  assignee: string;
+  link?: string;
+}
+
+export interface Reference {
+  id: string;
+  name: string;
+  position: string;
+  company: string;
+  email: string;
+  phone: string;
+  relationship: 'Manager' | 'Peer' | 'Subordinate' | 'Client' | 'Academic';
+}
+
+// ============================================
+// UPDATE: ResumeSections with new optional fields
+// ============================================
+
 export interface ResumeSections {
   contact: ContactInfo;
   summary: ProfessionalSummary;
@@ -204,6 +254,11 @@ export interface ResumeSections {
   publications: Publication[];
   awards: Award[];
   customSections: CustomSection[];
+  // NEW: Optional fields for ML parser
+  professionalAffiliations?: ProfessionalAffiliation[];
+  conferences?: Conference[];
+  patents?: Patent[];
+  references?: Reference[];
 }
 
 export interface ResumeMetadata {
