@@ -1,7 +1,6 @@
 // src/pages/CareerBlog.tsx
 // ============================================
 // CAREER HUB - Real-time Job Board & Career Blog
-// Institutional Level with Auto-updating Jobs
 // ============================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -13,12 +12,11 @@ import {
   MdClose, MdKeyboardArrowDown, MdKeyboardArrowUp,
   MdLink, MdCalendarToday, MdPerson, MdCategory,
   MdRssFeed, MdPublic, MdLanguage, MdAttachMoney,
-  MdStar, MdStarBorder, MdInfo, MdCheckCircle,
+  MdStar, MdStarBorder, MdInfo, MdCheckCircle, MdVisibility,
 } from 'react-icons/md';
 import { FaLinkedin, FaTwitter, FaFacebook } from 'react-icons/fa';
-import Loading from '../components/Loading';
-import { jobScraper, JobListing } from '../api/jobScraper';
 import toast from 'react-hot-toast';
+import { jobScraper, JobListing } from '../api/jobScraper';
 
 // ============================================
 // BLOG POSTS - Admin Created (3 with 400+ words)
@@ -249,7 +247,6 @@ const CareerHub: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedJob, setSelectedJob] = useState<JobListing | null>(null);
   
@@ -290,7 +287,7 @@ const CareerHub: React.FC = () => {
 
     refreshInterval.current = setInterval(() => {
       fetchJobs(true);
-    }, 60 * 60 * 1000); // 1 hour
+    }, 60 * 60 * 1000);
 
     return () => {
       if (refreshInterval.current) {
@@ -377,7 +374,7 @@ const CareerHub: React.FC = () => {
             disabled={loading}
             className="py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {loading ? <Loading type="spinner" size="sm" /> : <><MdSearch /> Search</>}
+            {loading ? 'Loading...' : <><MdSearch /> Search</>}
           </button>
         </div>
 
@@ -403,9 +400,32 @@ const CareerHub: React.FC = () => {
         </div>
       </div>
 
-      {/* Job Listings */}
+      {/* Job Listings - FIXED: Removed count prop */}
       {loading && !refreshing ? (
-        <Loading type="skeleton" count={5} />
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="h-5 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                    <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="h-5 bg-gray-200 rounded w-16"></div>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="flex justify-between">
+                  <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                  <div className="h-4 bg-gray-200 rounded w-16"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : jobs.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <MdWork className="w-16 h-16 text-gray-300 mx-auto mb-4" />
