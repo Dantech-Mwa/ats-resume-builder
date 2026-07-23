@@ -1,10 +1,11 @@
+// src/components/PricingCard.tsx
 // ============================================
 // PRICING CARD COMPONENT
 // ============================================
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { MdCheck, MdClose, MdStar } from 'react-icons/md';
+import { MdCheck, MdClose, MdStar, MdLock } from 'react-icons/md';
 import { PricingPlan } from '../lib/types';
 
 interface PricingCardProps {
@@ -12,6 +13,7 @@ interface PricingCardProps {
   onSelect: (planId: string) => void;
   loading?: boolean;
   currentPlan?: string;
+  isLocked?: boolean; // ✅ NEW: Add isLocked prop
 }
 
 const PricingCard: React.FC<PricingCardProps> = ({
@@ -19,6 +21,7 @@ const PricingCard: React.FC<PricingCardProps> = ({
   onSelect,
   loading = false,
   currentPlan,
+  isLocked = false, // ✅ NEW: Default to false
 }) => {
   const isCurrentPlan = currentPlan === plan.id;
   const isPopular = plan.highlighted;
@@ -33,6 +36,7 @@ const PricingCard: React.FC<PricingCardProps> = ({
           ? 'border-blue-500 shadow-strong ring-2 ring-blue-500/20' 
           : 'border-gray-200 shadow-soft hover:shadow-medium'
         }
+        ${isLocked ? 'opacity-90' : ''}
       `}
     >
       {/* Popular Badge */}
@@ -50,6 +54,16 @@ const PricingCard: React.FC<PricingCardProps> = ({
         </div>
       )}
 
+      {/* ✅ Locked Badge */}
+      {isLocked && (
+        <div className="absolute top-4 left-4">
+          <span className="flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-orange-100 text-orange-700">
+            <MdLock className="w-3 h-3" />
+            Locked
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className={`p-6 ${isPopular ? 'bg-gradient-to-br from-blue-50 to-indigo-50' : ''}`}>
         <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
@@ -62,6 +76,14 @@ const PricingCard: React.FC<PricingCardProps> = ({
             ${plan.originalPrice}/{plan.duration}
           </p>
         )}
+        
+        {/* ✅ Locked indicator in header */}
+        {isLocked && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg">
+            <MdLock className="w-3 h-3" />
+            <span>Subscribe to download</span>
+          </div>
+        )}
       </div>
 
       {/* Features */}
@@ -70,7 +92,9 @@ const PricingCard: React.FC<PricingCardProps> = ({
           {plan.features.map((feature, index) => (
             <li key={index} className="flex items-start gap-3">
               <MdCheck className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-              <span className="text-sm text-gray-600">{feature}</span>
+              <span className={`text-sm ${isLocked ? 'text-gray-400' : 'text-gray-600'}`}>
+                {feature}
+              </span>
             </li>
           ))}
         </ul>
@@ -85,18 +109,30 @@ const PricingCard: React.FC<PricingCardProps> = ({
             w-full py-3 px-6 text-sm font-semibold rounded-xl transition-all duration-200
             ${isCurrentPlan
               ? 'bg-green-50 text-green-700 cursor-default'
-              : isPopular
-                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/25'
-                : 'bg-gray-900 text-white hover:bg-gray-800'
+              : isLocked
+                ? 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/25'
+                : isPopular
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/25'
+                  : 'bg-gray-900 text-white hover:bg-gray-800'
             }
             disabled:opacity-50 disabled:cursor-not-allowed
           `}
         >
-          {isCurrentPlan ? 'Current Plan' : plan.buttonText}
+          {isCurrentPlan 
+            ? '✅ Current Plan' 
+            : isLocked 
+              ? '🔒 Subscribe to Download' 
+              : plan.buttonText
+          }
         </button>
-        {plan.id === 'yearly' && (
+        {plan.id === 'yearly' && !isLocked && (
           <p className="text-xs text-gray-400 text-center mt-2">
             Save 17% compared to monthly billing
+          </p>
+        )}
+        {isLocked && (
+          <p className="text-xs text-orange-400 text-center mt-2">
+            🔓 Subscribe to unlock downloads
           </p>
         )}
       </div>
