@@ -1,5 +1,5 @@
 // ============================================
-// DASHBOARD PAGE - Fixed with databaseService
+// DASHBOARD PAGE - Firebase Realtime Database Connected
 // ============================================
 
 import React, { useEffect, useState } from 'react';
@@ -20,7 +20,7 @@ import {
 } from 'react-icons/md';
 import { useAuth, useResume } from '../store';
 import { databaseService } from '../lib/firebase';
-import { ResumeMetadata } from '../lib/types';
+import { ResumeMetadata, ResumeData } from '../lib/types';
 import { formatDate } from '../lib/utils';
 import Loading from '../components/Loading';
 import Modal, { ConfirmModal } from '../components/Modal';
@@ -31,23 +31,67 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { createNewResume } = useResume();
+  
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [resumes, setResumes] = useState<ResumeMetadata[]>([]);
+  const [avgScore, setAvgScore] = useState<number | string>('--');
+  const [improvement, setImprovement] = useState<number | string>('--');
+  const [fullResumes, setFullResumes] = useState<ResumeData[]>([]);
 
+  // Load resumes from Firebase Realtime Database
   useEffect(() => {
-    loadResumes();
+    if (user) {
+      loadResumes();
+    }
   }, [user]);
 
   const loadResumes = async () => {
     if (!user) return;
     setLoading(true);
     try {
+      console.log('🔍 Loading resumes for user:', user.id);
+      
+      // Fetch from Firebase Realtime Database
       const userResumes = await databaseService.getUserResumes(user.id);
-      setResumes(userResumes.map(r => r.metadata));
-    } catch (error) {
-      console.error('Failed to load resumes:', error);
+      console.log('📦 Found resumes:', userResumes.length);
+      
+      setFullResumes(userResumes);
+      
+      // Extract metadata for display
+      const metadata = userResumes.map(r => r.metadata);
+      setResumes(metadata);
+
+      // Calculate Average ATS Score
+      const scores = userResumes
+        .filter(r => r.atsScore?.overall && r.atsScore.overall > 0)
+        .map(r => r.atsScore!.overall);
+      
+      if (scores.length > 0) {
+        const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+        setAvgScore(`${avg}/100`);
+      } else {
+        setAvgScore('--');
+      }
+
+      // Calculate Improvement (latest vs earliest)
+      if (scores.length >= 2) {
+        const sortedScores = [...scores].sort((a, b) => {
+          const dateA = userResumes.find(r => r.atsScore?.overall === a)?.metadata.updatedAt || '';
+          const dateB = userResumes.find(r => r.atsScore?.overall === b)?.metadata.updatedAt || '';
+          return new Date(dateA).getTime() - new Date(dateB).getTime();
+        });
+        const first = sortedScores[0];
+        const last = sortedScores[sortedScores.length - 1];
+        const diff = last - first;
+        setImprovement(diff > 0 ? `+${diff}` : `${diff}`);
+      } else {
+        setImprovement('--');
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to load resumes:', error);
+      toast.error('Failed to load your resumes');
     } finally {
       setLoading(false);
     }
@@ -67,8 +111,12 @@ const Dashboard: React.FC = () => {
     try {
       await databaseService.deleteResume(user!.id, resumeId);
       setResumes(resumes.filter((r) => r.id !== resumeId));
+      setFullResumes(fullResumes.filter(r => r.metadata.id !== resumeId));
       toast.success('Resume deleted');
+      // Refresh stats
+      loadResumes();
     } catch (error) {
+      console.error('Delete error:', error);
       toast.error('Failed to delete resume');
     }
     setDeleteConfirm(null);
@@ -77,9 +125,10 @@ const Dashboard: React.FC = () => {
   const handleDuplicate = async (resume: ResumeMetadata) => {
     try {
       await databaseService.duplicateResume(user!.id, resume.id);
-      await loadResumes();
       toast.success('Resume duplicated');
+      await loadResumes();
     } catch (error) {
+      console.error('Duplicate error:', error);
       toast.error('Failed to duplicate resume');
     }
   };
@@ -90,6 +139,10 @@ const Dashboard: React.FC = () => {
     if (score >= 60) return 'text-yellow-600';
     return 'text-red-600';
   };
+
+  const daysActive = user?.createdAt 
+    ? Math.ceil((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)) 
+    : 0;
 
   if (loading) {
     return <Loading type="page" text="Loading your dashboard..." />;
@@ -161,13 +214,13 @@ const Dashboard: React.FC = () => {
         </motion.div>
       )}
 
-      {/* Stats */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
           { icon: <MdDescription />, label: 'Total Resumes', value: resumes.length, color: 'bg-blue-100 text-blue-600' },
-          { icon: <MdStar />, label: 'Avg ATS Score', value: '--', color: 'bg-yellow-100 text-yellow-600' },
-          { icon: <MdTrendingUp />, label: 'Improvement', value: '--', color: 'bg-green-100 text-green-600' },
-          { icon: <MdCalendarToday />, label: 'Days Active', value: user ? Math.ceil((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0, color: 'bg-purple-100 text-purple-600' },
+          { icon: <MdStar />, label: 'Avg ATS Score', value: avgScore, color: 'bg-yellow-100 text-yellow-600' },
+          { icon: <MdTrendingUp />, label: 'Improvement', value: improvement, color: 'bg-green-100 text-green-600' },
+          { icon: <MdCalendarToday />, label: 'Days Active', value: daysActive, color: 'bg-purple-100 text-purple-600' },
         ].map((stat, index) => (
           <div key={index} className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center gap-3">
@@ -203,6 +256,7 @@ const Dashboard: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Create New Card */}
             <motion.button
               whileHover={{ scale: 1.02 }}
               onClick={handleCreateNew}
@@ -214,6 +268,7 @@ const Dashboard: React.FC = () => {
               <p className="text-sm font-medium text-gray-700">Create New Resume</p>
             </motion.button>
 
+            {/* Resume Cards */}
             {resumes.map((resume) => (
               <motion.div
                 key={resume.id}
@@ -221,6 +276,7 @@ const Dashboard: React.FC = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 className="bg-white rounded-xl border border-gray-200 hover:shadow-medium transition-all group relative"
               >
+                {/* Mini Preview */}
                 <div className="aspect-[3/4] bg-gray-50 rounded-t-xl overflow-hidden border-b border-gray-100">
                   <div className="p-4">
                     <div className="w-full h-2 bg-gray-200 rounded mb-2" />
@@ -232,18 +288,28 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Info */}
                 <div className="p-4">
                   <h3 className="text-sm font-semibold text-gray-900 mb-1 truncate">{resume.title}</h3>
                   <p className="text-xs text-gray-500">Updated {formatDate(resume.updatedAt)}</p>
-                  {resume.completeness && (
+                  
+                  {/* ATS Score Badge */}
+                  {fullResumes.find(r => r.metadata.id === resume.id)?.atsScore?.overall ? (
                     <div className="flex items-center gap-1 mt-2">
-                      <span className={`text-xs font-medium ${getATSColor(resume.completeness)}`}>
-                        {resume.completeness}% Complete
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        (fullResumes.find(r => r.metadata.id === resume.id)?.atsScore?.overall || 0) >= 80 
+                          ? 'bg-green-100 text-green-700' 
+                          : 'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        ATS: {fullResumes.find(r => r.metadata.id === resume.id)?.atsScore?.overall}/100
                       </span>
                     </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 mt-2">Not analyzed yet</p>
                   )}
                 </div>
 
+                {/* Hover Actions */}
                 <div className="absolute inset-0 bg-black/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <button onClick={() => handleEdit(resume.id)} className="p-2 bg-white rounded-lg hover:bg-gray-100 transition-colors" title="Edit">
                     <MdEdit className="w-4 h-4 text-gray-700" />
@@ -261,10 +327,10 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
+      {/* Upload Modal */}
       <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload Existing Resume" size="md">
         <FileUpload
           onFileSelect={() => {
-            toast.success('Resume uploaded! Analyzing...');
             setShowUpload(false);
             navigate('/builder?upload=true');
           }}
@@ -273,6 +339,7 @@ const Dashboard: React.FC = () => {
         />
       </Modal>
 
+      {/* Delete Confirmation */}
       <ConfirmModal
         isOpen={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
