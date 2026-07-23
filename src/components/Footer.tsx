@@ -1,5 +1,5 @@
 // ============================================
-// FOOTER COMPONENT
+// FOOTER COMPONENT - Complete with All Links
 // ============================================
 
 import React from 'react';
@@ -27,16 +27,16 @@ const Footer: React.FC = () => {
               Land more interviews with a resume that passes applicant tracking systems.
             </p>
             <div className="flex gap-3">
-              <a href="#" className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" aria-label="Twitter">
+              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" aria-label="Twitter">
                 <FaTwitter className="w-4 h-4" />
               </a>
-              <a href="#" className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" aria-label="LinkedIn">
+              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" aria-label="LinkedIn">
                 <FaLinkedin className="w-4 h-4" />
               </a>
-              <a href="#" className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" aria-label="GitHub">
+              <a href="https://github.com/Dantech-Mwa/ats-resume-builder" target="_blank" rel="noopener noreferrer" className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" aria-label="GitHub">
                 <FaGithub className="w-4 h-4" />
               </a>
-              <a href="#" className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" aria-label="Facebook">
+              <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" aria-label="Facebook">
                 <FaFacebook className="w-4 h-4" />
               </a>
             </div>
@@ -62,14 +62,14 @@ const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  ATS Compatibility
-                </a>
+                <Link to="/sample-resumes" className="text-sm text-gray-400 hover:text-white transition-colors">
+                  Sample Resumes
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  API
-                </a>
+                <Link to="/career-blog" className="text-sm text-gray-400 hover:text-white transition-colors">
+                  Career Blog
+                </Link>
               </li>
             </ul>
           </div>
@@ -79,29 +79,29 @@ const Footer: React.FC = () => {
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Resources</h3>
             <ul className="space-y-2">
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/career-blog?tab=blog" className="text-sm text-gray-400 hover:text-white transition-colors">
                   Resume Writing Guide
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/career-blog?tab=blog" className="text-sm text-gray-400 hover:text-white transition-colors">
                   ATS Optimization Tips
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  Career Blog
-                </a>
+                <Link to="/career-blog?tab=jobs" className="text-sm text-gray-400 hover:text-white transition-colors">
+                  Job Board
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/sample-resumes" className="text-sm text-gray-400 hover:text-white transition-colors">
                   Sample Resumes
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/faq" className="text-sm text-gray-400 hover:text-white transition-colors">
                   FAQ
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -111,14 +111,14 @@ const Footer: React.FC = () => {
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Company</h3>
             <ul className="space-y-2">
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/about" className="text-sm text-gray-400 hover:text-white transition-colors">
                   About Us
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/contact" className="text-sm text-gray-400 hover:text-white transition-colors">
                   Contact
-                </a>
+                </Link>
               </li>
               <li>
                 <Link to="/privacy" className="text-sm text-gray-400 hover:text-white transition-colors">
@@ -131,9 +131,9 @@ const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/career-blog?tab=jobs" className="text-sm text-gray-400 hover:text-white transition-colors">
                   Careers
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
