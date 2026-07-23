@@ -1,7 +1,7 @@
 // src/api/jobScraper.ts
 // ============================================
 // JOB SCRAPING API - Real-time job listings
-// Uses multiple free APIs and web scraping
+// Includes African & Kenyan job sources
 // ============================================
 
 export interface JobListing {
@@ -13,12 +13,15 @@ export interface JobListing {
   salary?: string;
   description: string;
   url: string;
-  source: 'linkedin' | 'indeed' | 'glassdoor' | 'remoteok' | 'wellfound' | 'stackoverflow' | 'brightermonday';
+  source: 'linkedin' | 'indeed' | 'glassdoor' | 'remoteok' | 'wellfound' | 
+          'stackoverflow' | 'brightermonday' | 'myjobmag' | 'fuzu' | 
+          'jobberman' | 'careerjet' | 'kenyajobs' | 'ajira' | 'corporatestaffing' | 'careerpoint';
   postedAt: string;
   remote: boolean;
   skills?: string[];
   experienceLevel?: 'entry' | 'mid' | 'senior' | 'lead' | 'executive';
   category?: string;
+  region?: 'kenya' | 'africa' | 'global';
 }
 
 export interface ScrapedJob {
@@ -56,6 +59,7 @@ class JobScraper {
     location?: string;
     remote?: boolean;
     limit?: number;
+    region?: 'kenya' | 'africa' | 'global';
   }): Promise<JobListing[]> {
     // Check cache
     if (this.cache.length > 0 && this.lastFetch) {
@@ -66,19 +70,62 @@ class JobScraper {
     }
 
     try {
-      // Fetch from multiple sources in parallel
-      const [linkedinJobs, remoteOkJobs, wellfoundJobs, stackOverflowJobs] = await Promise.all([
+      // Fetch from ALL sources in parallel
+      const [
+        linkedinJobs,
+        remoteOkJobs,
+        wellfoundJobs,
+        stackOverflowJobs,
+        brightMondayJobs,
+        myJobMagJobs,
+        fuzuJobs,
+        jobbermanJobs,
+        careerJetJobs,
+        kenyaJobsJobs,
+        ajiraJobs,
+        corporateStaffingJobs,
+        careerPointJobs,
+      ] = await Promise.allSettled([
         this.fetchLinkedInJobs(params?.query),
         this.fetchRemoteOkJobs(),
         this.fetchWellfoundJobs(),
         this.fetchStackOverflowJobs(),
+        this.fetchBrighterMondayJobs(),
+        this.fetchMyJobMagJobs(),
+        this.fetchFuzuJobs(),
+        this.fetchJobbermanJobs(),
+        this.fetchCareerJetJobs(),
+        this.fetchKenyaJobs(),
+        this.fetchAjiraJobs(),
+        this.fetchCorporateStaffingJobs(),
+        this.fetchCareerPointJobs(),
       ]);
 
-      // Combine and deduplicate
-      const allJobs = [...linkedinJobs, ...remoteOkJobs, ...wellfoundJobs, ...stackOverflowJobs];
-      const uniqueJobs = this.deduplicateJobs(allJobs);
+      // Extract successful results
+      const allJobs: JobListing[] = [];
       
-      // Sort by recency
+      const addJobs = (result: any) => {
+        if (result.status === 'fulfilled' && result.value.length > 0) {
+          allJobs.push(...result.value);
+        }
+      };
+
+      addJobs(linkedinJobs);
+      addJobs(remoteOkJobs);
+      addJobs(wellfoundJobs);
+      addJobs(stackOverflowJobs);
+      addJobs(brightMondayJobs);
+      addJobs(myJobMagJobs);
+      addJobs(fuzuJobs);
+      addJobs(jobbermanJobs);
+      addJobs(careerJetJobs);
+      addJobs(kenyaJobsJobs);
+      addJobs(ajiraJobs);
+      addJobs(corporateStaffingJobs);
+      addJobs(careerPointJobs);
+
+      // Deduplicate and sort
+      const uniqueJobs = this.deduplicateJobs(allJobs);
       uniqueJobs.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
 
       this.cache = uniqueJobs;
@@ -87,34 +134,27 @@ class JobScraper {
       return this.filterJobs(this.cache, params);
     } catch (error) {
       console.error('Job scraping error:', error);
-      // Return cached data if available, otherwise mock
       if (this.cache.length > 0) return this.filterJobs(this.cache, params);
       return this.getMockJobs();
     }
   }
 
   // ============================================
-  // SOURCE 1: LinkedIn (via unofficial RSS/API)
+  // SOURCE 1: LinkedIn (Global)
   // ============================================
 
   private async fetchLinkedInJobs(query?: string): Promise<JobListing[]> {
     try {
-      // Using a public LinkedIn job feed proxy
       const searchQuery = query || 'software developer';
       const response = await fetch(
         `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(searchQuery)}&start=0`,
-        {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
-        }
+        { headers: { 'User-Agent': 'Mozilla/5.0' } }
       );
 
       if (!response.ok) throw new Error('LinkedIn fetch failed');
 
       const html = await response.text();
-      const jobs = this.parseLinkedInHTML(html);
-      return jobs;
+      return this.parseLinkedInHTML(html);
     } catch (error) {
       console.warn('LinkedIn fetch failed:', error);
       return [];
@@ -123,7 +163,6 @@ class JobScraper {
 
   private parseLinkedInHTML(html: string): JobListing[] {
     const jobs: JobListing[] = [];
-    // Parse job cards from LinkedIn HTML
     const jobCards = html.match(/<li[^>]*class="[^"]*job-card[^"]*"[^>]*>.*?<\/li>/gs) || [];
     
     for (const card of jobCards) {
@@ -144,6 +183,7 @@ class JobScraper {
           source: 'linkedin',
           postedAt: new Date().toISOString(),
           remote: locationMatch?.[1]?.toLowerCase().includes('remote') || false,
+          region: 'global',
         });
       }
     }
@@ -152,7 +192,7 @@ class JobScraper {
   }
 
   // ============================================
-  // SOURCE 2: RemoteOK (Remote jobs)
+  // SOURCE 2: RemoteOK (Global Remote)
   // ============================================
 
   private async fetchRemoteOkJobs(): Promise<JobListing[]> {
@@ -182,6 +222,7 @@ class JobScraper {
               postedAt: item.date || new Date().toISOString(),
               remote: true,
               skills: item.tags || [],
+              region: 'global',
             });
           }
         }
@@ -195,7 +236,7 @@ class JobScraper {
   }
 
   // ============================================
-  // SOURCE 3: Wellfound (AngelList)
+  // SOURCE 3: Wellfound (Global)
   // ============================================
 
   private async fetchWellfoundJobs(): Promise<JobListing[]> {
@@ -224,6 +265,7 @@ class JobScraper {
             postedAt: job.posted_at || new Date().toISOString(),
             remote: job.remote || false,
             skills: job.tags || [],
+            region: 'global',
           });
         }
       }
@@ -249,17 +291,298 @@ class JobScraper {
       if (!response.ok) throw new Error('StackOverflow fetch failed');
       
       const xml = await response.text();
-      const jobs = this.parseStackOverflowXML(xml);
-      return jobs;
+      return this.parseXMLJobs(xml, 'stackoverflow', 'global');
     } catch (error) {
       console.warn('StackOverflow fetch failed:', error);
       return [];
     }
   }
 
-  private parseStackOverflowXML(xml: string): JobListing[] {
+  // ============================================
+  // 🇰🇪 KENYAN JOB SOURCES
+  // ============================================
+
+  // 1. BrighterMonday - Kenya's leading job site
+  private async fetchBrighterMondayJobs(): Promise<JobListing[]> {
+    try {
+      const response = await fetch('https://www.brightermonday.co.ke/jobs/rss', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      
+      if (!response.ok) {
+        // Fallback to search API if RSS fails
+        const searchResponse = await fetch('https://www.brightermonday.co.ke/search/jobs?limit=30', {
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        if (!searchResponse.ok) throw new Error('BrighterMonday fetch failed');
+        const html = await searchResponse.text();
+        return this.parseBrighterMondayHTML(html);
+      }
+      
+      const xml = await response.text();
+      return this.parseXMLJobs(xml, 'brightermonday', 'kenya');
+    } catch (error) {
+      console.warn('BrighterMonday fetch failed:', error);
+      return [];
+    }
+  }
+
+  private parseBrighterMondayHTML(html: string): JobListing[] {
     const jobs: JobListing[] = [];
-    // Simple XML parsing
+    const jobCards = html.match(/<div[^>]*class="[^"]*job[^"]*"[^>]*>.*?<\/div>/gs) || [];
+    
+    for (const card of jobCards) {
+      const titleMatch = card.match(/<h3[^>]*>(.*?)<\/h3>/i);
+      const companyMatch = card.match(/<span[^>]*class="[^"]*company[^"]*"[^>]*>(.*?)<\/span>/i);
+      const locationMatch = card.match(/<span[^>]*class="[^"]*location[^"]*"[^>]*>(.*?)<\/span>/i);
+      
+      if (titleMatch) {
+        jobs.push({
+          id: `brightermonday-${jobs.length}-${Date.now()}`,
+          title: titleMatch[1].trim(),
+          company: companyMatch?.[1]?.trim() || 'Kenya',
+          location: locationMatch?.[1]?.trim() || 'Kenya',
+          type: 'full-time',
+          description: '',
+          url: '#',
+          source: 'brightermonday',
+          postedAt: new Date().toISOString(),
+          remote: false,
+          region: 'kenya',
+        });
+      }
+    }
+    return jobs;
+  }
+
+  // 2. MyJobMag - African job board
+  private async fetchMyJobMagJobs(): Promise<JobListing[]> {
+    try {
+      const response = await fetch('https://www.myjobmag.com/feeds/jobs.xml', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      
+      if (!response.ok) throw new Error('MyJobMag fetch failed');
+      
+      const xml = await response.text();
+      return this.parseXMLJobs(xml, 'myjobmag', 'africa');
+    } catch (error) {
+      console.warn('MyJobMag fetch failed:', error);
+      return [];
+    }
+  }
+
+  // 3. Fuzu - East African job platform
+  private async fetchFuzuJobs(): Promise<JobListing[]> {
+    try {
+      const response = await fetch('https://api.fuzu.com/v1/jobs?limit=30', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error('Fuzu fetch failed');
+      
+      const data = await response.json();
+      const jobs: JobListing[] = [];
+      
+      if (data.data) {
+        for (const job of data.data.slice(0, 20)) {
+          jobs.push({
+            id: `fuzu-${job.id}`,
+            title: job.title || 'Position',
+            company: job.company?.name || 'Company',
+            location: job.location || job.country || 'Kenya',
+            type: job.type || 'full-time',
+            salary: job.salary ? `${job.salary.min}-${job.salary.max}` : undefined,
+            description: job.description || '',
+            url: job.url || `https://fuzu.com/jobs/${job.id}`,
+            source: 'fuzu',
+            postedAt: job.postedAt || new Date().toISOString(),
+            remote: job.remote || false,
+            region: 'kenya',
+          });
+        }
+      }
+      
+      return jobs;
+    } catch (error) {
+      console.warn('Fuzu fetch failed:', error);
+      return [];
+    }
+  }
+
+  // 4. Kenya Jobs
+  private async fetchKenyaJobs(): Promise<JobListing[]> {
+    try {
+      const response = await fetch('https://kenyajobs.com/rss', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      
+      if (!response.ok) throw new Error('KenyaJobs fetch failed');
+      
+      const xml = await response.text();
+      return this.parseXMLJobs(xml, 'kenyajobs', 'kenya');
+    } catch (error) {
+      console.warn('KenyaJobs fetch failed:', error);
+      return [];
+    }
+  }
+
+  // 5. Ajira - Kenyan job portal
+  private async fetchAjiraJobs(): Promise<JobListing[]> {
+    try {
+      const response = await fetch('https://ajira.co.ke/jobs/feed', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      
+      if (!response.ok) throw new Error('Ajira fetch failed');
+      
+      const xml = await response.text();
+      return this.parseXMLJobs(xml, 'ajira', 'kenya');
+    } catch (error) {
+      console.warn('Ajira fetch failed:', error);
+      return [];
+    }
+  }
+
+  // 6. Corporate Staffing - Kenyan recruitment
+  private async fetchCorporateStaffingJobs(): Promise<JobListing[]> {
+    try {
+      const response = await fetch('https://www.corporatestaffing.co.ke/jobs', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      
+      if (!response.ok) throw new Error('CorporateStaffing fetch failed');
+      
+      const html = await response.text();
+      return this.parseCorporateStaffingHTML(html);
+    } catch (error) {
+      console.warn('CorporateStaffing fetch failed:', error);
+      return [];
+    }
+  }
+
+  private parseCorporateStaffingHTML(html: string): JobListing[] {
+    const jobs: JobListing[] = [];
+    const jobItems = html.match(/<div[^>]*class="[^"]*job-item[^"]*"[^>]*>.*?<\/div>/gs) || [];
+    
+    for (const item of jobItems) {
+      const titleMatch = item.match(/<h[2-4][^>]*>(.*?)<\/h[2-4]>/i);
+      const companyMatch = item.match(/<span[^>]*class="[^"]*company[^"]*"[^>]*>(.*?)<\/span>/i);
+      
+      if (titleMatch) {
+        jobs.push({
+          id: `corporatestaffing-${jobs.length}-${Date.now()}`,
+          title: titleMatch[1].trim(),
+          company: companyMatch?.[1]?.trim() || 'Kenya',
+          location: 'Nairobi, Kenya',
+          type: 'full-time',
+          description: '',
+          url: '#',
+          source: 'corporatestaffing',
+          postedAt: new Date().toISOString(),
+          remote: false,
+          region: 'kenya',
+        });
+      }
+    }
+    return jobs;
+  }
+
+  // 7. CareerPoint Kenya
+  private async fetchCareerPointJobs(): Promise<JobListing[]> {
+    try {
+      const response = await fetch('https://www.careerpoint.co.ke/jobs', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      
+      if (!response.ok) throw new Error('CareerPoint fetch failed');
+      
+      const html = await response.text();
+      return this.parseCareerPointHTML(html);
+    } catch (error) {
+      console.warn('CareerPoint fetch failed:', error);
+      return [];
+    }
+  }
+
+  private parseCareerPointHTML(html: string): JobListing[] {
+    const jobs: JobListing[] = [];
+    const jobItems = html.match(/<div[^>]*class="[^"]*job-listing[^"]*"[^>]*>.*?<\/div>/gs) || [];
+    
+    for (const item of jobItems) {
+      const titleMatch = item.match(/<h[2-4][^>]*>(.*?)<\/h[2-4]>/i);
+      const companyMatch = item.match(/<span[^>]*class="[^"]*company[^"]*"[^>]*>(.*?)<\/span>/i);
+      
+      if (titleMatch) {
+        jobs.push({
+          id: `careerpoint-${jobs.length}-${Date.now()}`,
+          title: titleMatch[1].trim(),
+          company: companyMatch?.[1]?.trim() || 'Kenya',
+          location: 'Kenya',
+          type: 'full-time',
+          description: '',
+          url: '#',
+          source: 'careerpoint',
+          postedAt: new Date().toISOString(),
+          remote: false,
+          region: 'kenya',
+        });
+      }
+    }
+    return jobs;
+  }
+
+  // ============================================
+  // 🌍 AFRICAN JOB SOURCES
+  // ============================================
+
+  // 8. Jobberman - West Africa (Nigeria/Ghana)
+  private async fetchJobbermanJobs(): Promise<JobListing[]> {
+    try {
+      const response = await fetch('https://www.jobberman.com/jobs/feed.xml', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      
+      if (!response.ok) throw new Error('Jobberman fetch failed');
+      
+      const xml = await response.text();
+      return this.parseXMLJobs(xml, 'jobberman', 'africa');
+    } catch (error) {
+      console.warn('Jobberman fetch failed:', error);
+      return [];
+    }
+  }
+
+  // 9. CareerJet South Africa
+  private async fetchCareerJetJobs(): Promise<JobListing[]> {
+    try {
+      const response = await fetch('https://www.careerjet.co.za/jobs.rss', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      
+      if (!response.ok) throw new Error('CareerJet fetch failed');
+      
+      const xml = await response.text();
+      return this.parseXMLJobs(xml, 'careerjet', 'africa');
+    } catch (error) {
+      console.warn('CareerJet fetch failed:', error);
+      return [];
+    }
+  }
+
+  // ============================================
+  // XML/RSS PARSER
+  // ============================================
+
+  private parseXMLJobs(
+    xml: string, 
+    source: string, 
+    region: 'kenya' | 'africa' | 'global'
+  ): JobListing[] {
+    const jobs: JobListing[] = [];
     const items = xml.match(/<item>.*?<\/item>/gs) || [];
     
     for (const item of items) {
@@ -267,19 +590,29 @@ class JobScraper {
       const linkMatch = item.match(/<link>(.*?)<\/link>/);
       const descriptionMatch = item.match(/<description>(.*?)<\/description>/);
       const pubDateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/);
+      const locationMatch = item.match(/<location>(.*?)<\/location>/i) || 
+                           item.match(/<category>(.*?)<\/category>/i);
       
       if (titleMatch && linkMatch) {
+        const title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+        let company = 'Company';
+        const companyMatch = title.match(/(?:at|@)\s+([^-]+?)(?:\s*[-–—]|\s*$)/i);
+        if (companyMatch) {
+          company = companyMatch[1].trim();
+        }
+        
         jobs.push({
-          id: `stackoverflow-${jobs.length}`,
-          title: titleMatch[1].replace(/<[^>]+>/g, '').trim(),
-          company: 'Stack Overflow',
-          location: 'Remote',
+          id: `${source}-${jobs.length}-${Date.now()}`,
+          title: title,
+          company: company,
+          location: locationMatch?.[1]?.replace(/<[^>]+>/g, '').trim() || 'Africa',
           type: 'full-time',
           description: descriptionMatch?.[1]?.replace(/<[^>]+>/g, '') || '',
           url: linkMatch[1],
-          source: 'stackoverflow',
+          source: source as any,
           postedAt: pubDateMatch?.[1] || new Date().toISOString(),
-          remote: true,
+          remote: false,
+          region: region,
         });
       }
     }
@@ -306,6 +639,7 @@ class JobScraper {
     location?: string;
     remote?: boolean;
     limit?: number;
+    region?: 'kenya' | 'africa' | 'global';
   }): JobListing[] {
     let filtered = jobs;
 
@@ -329,6 +663,12 @@ class JobScraper {
       filtered = filtered.filter(j => j.remote);
     }
 
+    if (params?.region) {
+      filtered = filtered.filter(j => 
+        j.region === params.region || j.region === 'global'
+      );
+    }
+
     if (params?.limit) {
       filtered = filtered.slice(0, params.limit);
     }
@@ -336,32 +676,41 @@ class JobScraper {
     return filtered;
   }
 
+  // ============================================
+  // MOCK JOBS (Fallback)
+  // ============================================
+
   private getMockJobs(): JobListing[] {
+    const kenyanCompanies = [
+      'Safaricom', 'Equity Bank', 'KCB Group', 'EABL', 'Bamburi Cement',
+      'Kengen', 'Nation Media Group', 'Sasini', 'Kakuzi', 'Mumias Sugar',
+      'Centum', 'CIC Insurance', 'Jubilee Insurance', 'East African Breweries',
+      'Airtel Kenya', 'Telkom Kenya', 'Kenya Power', 'Kenya Airways'
+    ];
+    
     const titles = [
       'Senior Software Engineer', 'Data Scientist', 'Product Manager',
-      'UX Designer', 'DevOps Engineer', 'Machine Learning Engineer',
-      'Full Stack Developer', 'Cloud Architect', 'Security Engineer',
-      'Mobile Developer', 'Frontend Engineer', 'Backend Developer'
+      'Marketing Manager', 'Financial Analyst', 'Human Resources Manager',
+      'Operations Manager', 'Sales Executive', 'Customer Service Manager',
+      'Project Manager', 'Business Development Manager', 'Accountant',
+      'Network Engineer', 'Systems Administrator', 'Digital Marketing Specialist'
     ];
-    const companies = [
-      'Google', 'Microsoft', 'Amazon', 'Meta', 'Apple',
-      'Netflix', 'Spotify', 'Stripe', 'Shopify', 'Twitter',
-      'LinkedIn', 'Salesforce', 'Adobe', 'Oracle', 'IBM'
-    ];
-    const locations = ['Remote', 'Nairobi, Kenya', 'Lagos, Nigeria', 'Cape Town, SA', 'Nairobi, Kenya'];
+
+    const locations = ['Nairobi, Kenya', 'Mombasa, Kenya', 'Kisumu, Kenya', 'Eldoret, Kenya', 'Remote'];
 
     return Array.from({ length: 30 }, (_, i) => ({
       id: `mock-${i}`,
       title: titles[i % titles.length],
-      company: companies[i % companies.length],
+      company: kenyanCompanies[i % kenyanCompanies.length],
       location: locations[i % locations.length],
       type: ['full-time', 'part-time', 'contract', 'internship'][i % 4] as any,
-      salary: i % 2 === 0 ? `$${60 + i * 5}K-$${80 + i * 5}K` : undefined,
-      description: 'A great opportunity to join a dynamic team.',
+      salary: i % 2 === 0 ? `KSh ${60 + i * 5}K-${80 + i * 5}K` : undefined,
+      description: 'A great opportunity to join a leading company in Kenya.',
       url: '#',
-      source: ['linkedin', 'indeed', 'glassdoor', 'remoteok', 'wellfound'][i % 5] as any,
+      source: ['brightermonday', 'fuzu', 'myjobmag', 'kenyajobs', 'ajira', 'corporatestaffing'][i % 6] as any,
       postedAt: new Date(Date.now() - i * 3600000).toISOString(),
       remote: i % 3 === 0,
+      region: 'kenya',
       skills: ['JavaScript', 'Python', 'React', 'Node.js', 'SQL'],
     }));
   }
