@@ -79,13 +79,24 @@ const Builder: React.FC = () => {
   
   const isUpload = searchParams.get('upload') === 'true';
 
-  // Check if user has active subscription for download
-  const hasActiveSubscription = useCallback(() => {
-    if (!user?.subscription) return false;
-    if (user.subscription.status !== 'active') return false;
-    const endDate = new Date(user.subscription.endDate);
-    return endDate > new Date();
-  }, [user]);
+  // ✅ Updated: Check both status AND isPaid
+const hasActiveSubscription = useCallback(() => {
+  if (!user?.subscription) return false;
+  if (user.subscription.status !== 'active') return false;
+  if (!user.subscription.isPaid) return false; // ✅ Must have paid
+  const endDate = new Date(user.subscription.endDate);
+  return endDate > new Date();
+}, [user]);
+
+// ✅ Updated: Get subscription status with payment check
+const getSubscriptionStatus = useCallback(() => {
+  if (!user?.subscription) return 'none';
+  if (user.subscription.status !== 'active') return 'none';
+  if (!user.subscription.isPaid) return 'unpaid'; // ✅ New status
+  const endDate = new Date(user.subscription.endDate);
+  if (endDate < new Date()) return 'expired';
+  return 'active';
+}, [user]);
 
   // Get subscription days remaining
   const getDaysRemaining = useCallback(() => {
