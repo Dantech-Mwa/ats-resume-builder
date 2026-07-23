@@ -237,7 +237,7 @@ const BLOG_POSTS: BlogPost[] = [
 // CAREER HUB COMPONENT
 // ============================================
 
-const CareerHub: React.FC = () => {
+const CareerBlog: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'jobs' | 'blog'>('jobs');
   const [search, setSearch] = useState('');
   const [location, setLocation] = useState('');
