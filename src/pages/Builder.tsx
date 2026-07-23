@@ -2,6 +2,7 @@
 // ============================================
 // BUILDER PAGE - Perfect Auto-Populate with ML
 // Enhanced with ML parser for intelligent resume parsing
+// PAY-TO-DOWNLOAD FLOW: Register → Edit → Pay to Download
 // ============================================
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -10,7 +11,7 @@ import {
   MdSave, MdDownload, MdPictureAsPdf, MdDescription,
   MdTextSnippet, MdAutoAwesome, MdCloudUpload,
   MdAnalytics, MdLightbulb, MdHistory, MdTrendingUp,
-  MdWarning, MdCheckCircle, MdSettings,
+  MdWarning, MdCheckCircle, MdSettings, MdLock, MdLockOpen,
 } from 'react-icons/md';
 import { useResume, useAI, useExport, useAuth } from '../store';
 import ResumeEditor from '../components/ResumeEditor';
@@ -77,6 +78,22 @@ const Builder: React.FC = () => {
   const [autoLearn, setAutoLearn] = useState(true);
   
   const isUpload = searchParams.get('upload') === 'true';
+
+  // Check if user has active subscription for download
+  const hasActiveSubscription = useCallback(() => {
+    if (!user?.subscription) return false;
+    if (user.subscription.status !== 'active') return false;
+    const endDate = new Date(user.subscription.endDate);
+    return endDate > new Date();
+  }, [user]);
+
+  // Get subscription days remaining
+  const getDaysRemaining = useCallback(() => {
+    if (!user?.subscription) return 0;
+    const endDate = new Date(user.subscription.endDate);
+    const now = new Date();
+    return Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  }, [user]);
 
   // ============================================
   // LIFECYCLE EFFECTS
@@ -545,7 +562,7 @@ const Builder: React.FC = () => {
   };
 
   // ============================================
-  // EXPORT
+  // EXPORT - PAY-TO-DOWNLOAD FLOW
   // ============================================
 
   const handleExport = async (format: string) => {
@@ -554,23 +571,16 @@ const Builder: React.FC = () => {
       return;
     }
 
-    // Check subscription
-    const subscription = user?.subscription;
-    
-    if (!subscription || subscription.status !== 'active') {
-      toast.error('Subscription required to download');
-      navigate('/pricing');
+    // 🔒 CHECK SUBSCRIPTION - PAY TO DOWNLOAD
+    if (!hasActiveSubscription()) {
+      // Close export modal and redirect to pricing with source parameter
+      setShowExport(false);
+      navigate('/pricing?source=download');
+      toast('💳 Please subscribe to download your resume', { duration: 5000 });
       return;
     }
 
-    // Check if subscription is expired
-    const endDate = new Date(subscription.endDate);
-    if (endDate < new Date()) {
-      toast.error('Your subscription has expired. Please renew.');
-      navigate('/pricing');
-      return;
-    }
-
+    // ✅ Active subscription - allow download
     setExportLoading(true);
     try {
       const generator = ResumeGenerator.getInstance();
@@ -583,7 +593,7 @@ const Builder: React.FC = () => {
         margins: 'normal',
         fontSize: 'normal',
       });
-      toast.success(`Resume exported as ${format.toUpperCase()}!`);
+      toast.success(`✅ Resume exported as ${format.toUpperCase()}!`);
       setShowExport(false);
     } catch (error: any) {
       toast.error(error.message || 'Export failed');
@@ -732,6 +742,8 @@ const Builder: React.FC = () => {
     return <Loading type="page" text={parsing ? 'Analyzing resume with ML...' : 'Loading...'} fullScreen />;
   }
 
+  const isDownloadLocked = !hasActiveSubscription();
+
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col">
       {/* Header */}
@@ -774,6 +786,19 @@ const Builder: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-2">
+          {/* Subscription Status Badge */}
+          {user?.subscription && (
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+              hasActiveSubscription() 
+                ? 'bg-green-100 text-green-700' 
+                : 'bg-orange-100 text-orange-700'
+            }`}>
+              {hasActiveSubscription() 
+                ? `✅ ${getDaysRemaining()} days left` 
+                : '🔒 Subscribe to download'}
+            </span>
+          )}
+
           <button
             onClick={() => setShowTrainingPanel(!showTrainingPanel)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
@@ -803,35 +828,30 @@ const Builder: React.FC = () => {
             <MdSave className="w-4 h-4"/> Save
           </button>
           
-          {/* 🔒 Download - locked if no subscription */}
-          {user?.subscription?.plan === 'trial' && (
-            <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
-              Trial - {Math.ceil((new Date(user.subscription.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days left
-            </span>
-          )}
-          
-          <button 
+          {/* 🔒 DOWNLOAD BUTTON - Pay-to-Download Flow */}
+          <button
             onClick={() => {
-              if (!user?.subscription || user.subscription.status !== 'active' || new Date(user.subscription.endDate) < new Date()) {
-                toast.error('Subscribe to download your resume');
-                navigate('/pricing');
+              if (isDownloadLocked) {
+                // No active subscription - redirect to pricing
+                navigate('/pricing?source=download');
+                toast('💳 Please subscribe to download your resume', { duration: 4000 });
                 return;
               }
+              // Has active subscription - show export modal
               setShowExport(true);
-            }} 
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg ${
-              user?.subscription?.status === 'active' && new Date(user.subscription.endDate) > new Date()
+            }}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
+              !isDownloadLocked
                 ? 'text-white bg-blue-600 hover:bg-blue-700'
-                : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                : 'text-white bg-orange-500 hover:bg-orange-600 animate-pulse'
             }`}
-            title={!user?.subscription ? 'Subscribe to unlock downloads' : ''}
+            title={isDownloadLocked ? 'Subscribe to unlock downloads' : 'Download your resume'}
           >
-            {user?.subscription?.status === 'active' ? (
-              <MdDownload className="w-4 h-4"/>
+            {isDownloadLocked ? (
+              <><MdLock className="w-4 h-4" /> Subscribe to Download</>
             ) : (
-              '🔒'
+              <><MdDownload className="w-4 h-4" /> Download</>
             )}
-            Download
           </button>
         </div>
       </div>
@@ -860,12 +880,12 @@ const Builder: React.FC = () => {
       </Modal>
 
       {/* Export Modal */}
-      <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Download" size="sm">
+      <Modal isOpen={showExport} onClose={() => setShowExport(false)} title="Download Resume" size="sm">
         <div className="space-y-3">
           {[
-            {format:'pdf', icon:<MdPictureAsPdf/>, label:'PDF', desc:'Best for applications', color:'text-red-600 bg-red-50'},
-            {format:'docx', icon:<MdDescription/>, label:'Word', desc:'Editable', color:'text-blue-600 bg-blue-50'},
-            {format:'txt', icon:<MdTextSnippet/>, label:'Text', desc:'ATS-optimized', color:'text-green-600 bg-green-50'}
+            {format:'pdf', icon:<MdPictureAsPdf/>, label:'PDF', desc:'Best for job applications', color:'text-red-600 bg-red-50'},
+            {format:'docx', icon:<MdDescription/>, label:'Word', desc:'Editable format', color:'text-blue-600 bg-blue-50'},
+            {format:'txt', icon:<MdTextSnippet/>, label:'Text', desc:'ATS-optimized plain text', color:'text-green-600 bg-green-50'}
           ].map(o => (
             <button
               key={o.format}
