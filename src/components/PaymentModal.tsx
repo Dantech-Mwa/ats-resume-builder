@@ -184,6 +184,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         currency: 'USD',
         autoRenew: plan?.duration !== 'trial',
         paymentId: paymentDetails.transactionId,
+        isPaid: true,
       };
 
       // ✅ 3. Update local state
