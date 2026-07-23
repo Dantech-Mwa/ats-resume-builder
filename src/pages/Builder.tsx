@@ -806,7 +806,7 @@ const getSubscriptionStatus = useCallback(() => {
             }`}>
               {hasActiveSubscription() 
                 ? `✅ ${getDaysRemaining()} days left` 
-                : '🔒 Subscribe to download'}
+                : 'UPGRADE'}
             </span>
           )}
 
@@ -844,7 +844,7 @@ const getSubscriptionStatus = useCallback(() => {
   onClick={() => {
     if (isDownloadLocked) {
       // Show message explaining they need to pay $1
-      toast.error('💳 You must pay $1 for the 14-day trial to download your resume');
+      toast.error('💳 Pay $1 for 14-day trial to download your resume'');
       navigate('/pricing?source=download');
       return;
     }
@@ -858,7 +858,7 @@ const getSubscriptionStatus = useCallback(() => {
   title={isDownloadLocked ? 'Pay $1 to unlock downloads' : 'Download your resume'}
 >
   {isDownloadLocked ? (
-    <><MdLock className="w-4 h-4" /> Pay $1 to Download</>
+    <><MdLock className="w-4 h-4" /> Download</>
   ) : (
     <><MdDownload className="w-4 h-4" /> Download</>
   )}
