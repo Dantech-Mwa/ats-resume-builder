@@ -18,6 +18,11 @@ const Register = lazy(() => import('./pages/Register'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Builder = lazy(() => import('./pages/Builder'));
 const Pricing = lazy(() => import('./pages/Pricing'));
+const About = lazy(() => import('./pages/About'));
+const Contact = lazy(() => import('./pages/Contact'));
+const CareerBlog = lazy(() => import('./pages/CareerBlog'));
+const FAQ = lazy(() => import('./pages/FAQ'));
+const SampleResumes = lazy(() => import('./pages/SampleResumes'));
 
 // Loading fallback
 const PageLoader = () => (
@@ -79,6 +84,11 @@ const App: React.FC = () => {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/pricing" element={<Pricing />} />
+            <Route path="/about" element={<About />} />
+<Route path="/contact" element={<Contact />} />
+<Route path="/career-blog" element={<CareerBlog />} />
+<Route path="/faq" element={<FAQ />} />
+<Route path="/sample-resumes" element={<SampleResumes />} />
             
             {/* Protected Routes */}
             <Route
