@@ -71,35 +71,50 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       script.src = `https://www.paypal.com/sdk/js?client-id=BAA6-pKbrnpOaKuvEMkQ8nG3vEociOmnS3OVnp_oPANPNefmj3dPjrXcVvoKrr3prhADRZ4TY1jidZlNOQ&components=hosted-buttons&disable-funding=venmo&currency=USD`;
       script.async = true;
       
-      script.onload = () => {
-        console.log('✅ PayPal SDK loaded');
-        paypalScriptLoaded.current = true;
+     script.onload = () => {
+  console.log('✅ PayPal SDK loaded');
+  paypalScriptLoaded.current = true;
+  
+  // ✅ Add delay to ensure DOM is ready
+  setTimeout(() => {
+    try {
+      if ((window as any).paypal?.HostedButtons) {
+        console.log('🎯 Rendering PayPal button for:', containerId);
         
-        try {
-          if ((window as any).paypal?.HostedButtons) {
-            (window as any).paypal.HostedButtons({
-              hostedButtonId: buttonId,
-              onApprove: (data: any) => {
-                console.log('✅ PayPal payment approved:', data);
-                handlePayPalSuccess(data);
-              },
-              onCancel: () => {
-                console.log('❌ PayPal payment cancelled');
-                toast.error('Payment cancelled');
-              },
-              onError: (err: any) => {
-                console.error('❌ PayPal error:', err);
-                setPaymentError('PayPal payment failed. Please try again.');
-                toast.error('Payment failed. Please try again.');
-              },
-            }).render(`#${containerId}`);
-            console.log(`✅ PayPal button rendered for plan: ${planId}`);
-          }
-        } catch (error) {
-          console.error('Failed to render PayPal button:', error);
-          setPaymentError('Failed to load PayPal button. Please try again.');
-        }
-      };
+        (window as any).paypal.HostedButtons({
+          hostedButtonId: buttonId,
+          // ✅ Add style configuration
+          style: {
+            layout: 'horizontal',
+            color: 'blue',
+            shape: 'rect',
+            label: 'paypal',
+          },
+          onApprove: (data: any) => {
+            console.log('✅ PayPal payment approved:', data);
+            handlePayPalSuccess(data);
+          },
+          onCancel: () => {
+            console.log('❌ PayPal payment cancelled');
+            toast.error('Payment cancelled');
+          },
+          onError: (err: any) => {
+            console.error('❌ PayPal error:', err);
+            setPaymentError('PayPal payment failed. Please try again.');
+            toast.error('Payment failed. Please try again.');
+          },
+        }).render(`#${containerId}`);
+        
+        console.log(`✅ PayPal button rendered for plan: ${planId}`);
+      } else {
+        console.warn('⚠️ PayPal HostedButtons not available');
+      }
+    } catch (error) {
+      console.error('Failed to render PayPal button:', error);
+      setPaymentError('Failed to load PayPal button. Please try again.');
+    }
+  }, 500); // ✅ 500ms delay for DOM readiness
+};
 
       script.onerror = () => {
         console.error('Failed to load PayPal SDK');
@@ -473,19 +488,27 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
           {/* PayPal Button Container */}
 {paymentMethod === 'paypal' && (
-  <div className="min-h-[200px] flex flex-col items-center justify-center p-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-    <p className="text-sm text-gray-500 mb-4">
+  <div className="min-h-[200px] flex flex-col items-center justify-center p-6 bg-gray-50 rounded-xl border-2 border-gray-200">
+    <p className="text-sm text-gray-500 mb-4 text-center">
       {isTrial 
         ? 'Pay $1 with PayPal to start your 14-day trial'
         : 'You will be redirected to PayPal to complete your payment.'
       }
     </p>
+    
+    {/* ✅ CRITICAL FIX: Explicit width and min-width */}
     <div 
       id={containerId}
-      className="w-full max-w-[300px] mx-auto flex justify-center"
-      style={{ minHeight: '50px', minWidth: '200px' }}
+      className="w-full"
+      style={{ 
+        width: '100%', 
+        minWidth: '300px',
+        maxWidth: '400px',
+        margin: '0 auto'
+      }}
     />
-    <p className="text-xs text-gray-400 mt-3 flex items-center gap-1">
+    
+    <p className="text-xs text-gray-400 mt-3 flex items-center justify-center gap-1">
       <span className="inline-block w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
       Secure payment processed by PayPal
     </p>
