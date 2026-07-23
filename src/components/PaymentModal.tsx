@@ -472,23 +472,25 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           )}
 
           {/* PayPal Button Container */}
-          {paymentMethod === 'paypal' && (
-            <div className="min-h-[200px] flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl">
-              <p className="text-sm text-gray-500 mb-4">
-                {isTrial 
-                  ? 'Pay $1 with PayPal to start your 14-day trial'
-                  : 'You will be redirected to PayPal to complete your payment.'
-                }
-              </p>
-              <div 
-                id={containerId}
-                className="w-full flex justify-center"
-              />
-              <p className="text-xs text-gray-400 mt-3">
-                Secure payment processed by PayPal
-              </p>
-            </div>
-          )}
+{paymentMethod === 'paypal' && (
+  <div className="min-h-[200px] flex flex-col items-center justify-center p-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+    <p className="text-sm text-gray-500 mb-4">
+      {isTrial 
+        ? 'Pay $1 with PayPal to start your 14-day trial'
+        : 'You will be redirected to PayPal to complete your payment.'
+      }
+    </p>
+    <div 
+      id={containerId}
+      className="w-full max-w-[300px] mx-auto flex justify-center"
+      style={{ minHeight: '50px', minWidth: '200px' }}
+    />
+    <p className="text-xs text-gray-400 mt-3 flex items-center gap-1">
+      <span className="inline-block w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+      Secure payment processed by PayPal
+    </p>
+  </div>
+)}
 
           {/* Stripe Payment */}
           {paymentMethod === 'stripe' && (
