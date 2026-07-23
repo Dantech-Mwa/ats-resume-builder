@@ -220,13 +220,13 @@ class FirebaseAuthService {
       updatedAt: new Date().toISOString(),
     });
   }
-
-  async updateSubscription(userId: string, subscription: Subscription): Promise<void> {
-    await update(ref(realtimeDb, 'users/' + userId), {
-      subscription,
-      updatedAt: new Date().toISOString(),
-    });
-  }
+async updateSubscription(userId: string, subscription: Subscription): Promise<void> {
+  // ✅ Make sure we're saving the ENTIRE subscription object with isPaid
+  await update(ref(realtimeDb, 'users/' + userId), {
+    subscription: subscription, // <- This should include isPaid
+    updatedAt: new Date().toISOString(),
+  });
+}
 
   // ✅ NEW: Check if user has active subscription
   async hasActiveSubscription(userId: string): Promise<boolean> {
