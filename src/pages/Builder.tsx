@@ -12,7 +12,7 @@ import {
   MdAnalytics, MdLightbulb, MdHistory, MdTrendingUp,
   MdWarning, MdCheckCircle, MdSettings,
 } from 'react-icons/md';
-import { useResume, useAI, useExport } from '../store';
+import { useResume, useAI, useExport, useAuth } from '../store';
 import ResumeEditor from '../components/ResumeEditor';
 import Modal from '../components/Modal';
 import FileUpload from '../components/FileUpload';
@@ -76,6 +76,7 @@ const Builder: React.FC = () => {
   const [autoLearn, setAutoLearn] = useState(true);
   
   const isUpload = searchParams.get('upload') === 'true';
+  const { user } = useAuth();
 
   // ============================================
   // LIFECYCLE EFFECTS
@@ -583,28 +584,52 @@ const Builder: React.FC = () => {
   // EXPORT
   // ============================================
 
-  const handleExport = async (format: string) => {
-    if (!currentResume) { toast.error('No resume'); return; }
-    setExportLoading(true);
-    try {
-      const gen = ResumeGenerator.getInstance();
-      await gen.downloadResume(currentResume, {
-        format: format as any, 
-        templateId: currentResume.metadata.templateId,
-        includeAISuggestions: false, 
-        includeATSScore: true,
-        pageSize: 'A4', 
-        margins: 'normal', 
-        fontSize: 'normal',
-      });
-      toast.success(`Exported as ${format.toUpperCase()}!`);
-      setShowExport(false);
-    } catch (e: any) { 
-      toast.error(e.message); 
-    } finally {
-      setExportLoading(false);
-    }
-  };
+ const handleExport = async (format: string) => {
+  if (!currentResume) {
+    toast.error('No resume to export');
+    return;
+  }
+
+  // 🔒 CHECK SUBSCRIPTION
+  const { user } = useAuth();
+  const subscription = user?.subscription;
+  
+  if (!subscription || subscription.status !== 'active') {
+    toast.error('Subscription required to download');
+    // Redirect to pricing
+    navigate('/pricing');
+    return;
+  }
+
+  // Check if subscription is expired
+  const endDate = new Date(subscription.endDate);
+  if (endDate < new Date()) {
+    toast.error('Your subscription has expired. Please renew.');
+    navigate('/pricing');
+    return;
+  }
+
+  // ✅ Subscription valid - allow download
+  setExportLoading(true);
+  try {
+    const generator = ResumeGenerator.getInstance();
+    await generator.downloadResume(currentResume, {
+      format: format as any,
+      templateId: currentResume.metadata.templateId,
+      includeAISuggestions: false,
+      includeATSScore: true,
+      pageSize: 'A4',
+      margins: 'normal',
+      fontSize: 'normal',
+    });
+    toast.success(`Resume exported as ${format.toUpperCase()}!`);
+    setShowExport(false);
+  } catch (error: any) {
+    toast.error(error.message || 'Export failed');
+  } finally {
+    setExportLoading(false);
+  }
+};
 
   // ============================================
   // RENDER ML SUGGESTIONS PANEL
@@ -816,6 +841,49 @@ const Builder: React.FC = () => {
           >
             <MdSave className="w-4 h-4"/> Save
           </button>
+          <div className="flex items-center gap-2">
+  {/* Show subscription badge */}
+  {user?.subscription?.plan === 'trial' && (
+    <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+      Trial - {Math.ceil((new Date(user.subscription.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days left
+    </span>
+  )}
+  
+  <button onClick={() => setShowUpload(true)} className="...">
+    <MdCloudUpload className="w-4 h-4"/> Upload
+  </button>
+  <button onClick={handleReAnalyze} disabled={aiLoading} className="...">
+    <MdAutoAwesome className="w-4 h-4"/> {aiLoading?'Analyzing...':'Re-analyze'}
+  </button>
+  <button onClick={saveResume} className="...">
+    <MdSave className="w-4 h-4"/> Save
+  </button>
+  
+  {/* 🔒 Download - locked if no subscription */}
+  <button 
+    onClick={() => {
+      if (!user?.subscription || user.subscription.status !== 'active' || new Date(user.subscription.endDate) < new Date()) {
+        toast.error('Subscribe to download your resume');
+        navigate('/pricing');
+        return;
+      }
+      setShowExport(true);
+    }} 
+    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg ${
+      user?.subscription?.status === 'active' && new Date(user.subscription.endDate) > new Date()
+        ? 'text-white bg-blue-600 hover:bg-blue-700'
+        : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+    }`}
+    title={!user?.subscription ? 'Subscribe to unlock downloads' : ''}
+  >
+    {user?.subscription?.status === 'active' ? (
+      <MdDownload className="w-4 h-4"/>
+    ) : (
+      '🔒'
+    )}
+    Download
+  </button>
+</div>
           <button
             onClick={() => setShowExport(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
