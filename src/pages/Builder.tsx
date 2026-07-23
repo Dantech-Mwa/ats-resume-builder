@@ -841,29 +841,28 @@ const getSubscriptionStatus = useCallback(() => {
           
           {/* 🔒 DOWNLOAD BUTTON - Pay-to-Download Flow */}
           <button
-            onClick={() => {
-              if (isDownloadLocked) {
-                // No active subscription - redirect to pricing
-                navigate('/pricing?source=download');
-                toast('💳 Please subscribe to download your resume', { duration: 4000 });
-                return;
-              }
-              // Has active subscription - show export modal
-              setShowExport(true);
-            }}
-            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
-              !isDownloadLocked
-                ? 'text-white bg-blue-600 hover:bg-blue-700'
-                : 'text-white bg-orange-500 hover:bg-orange-600 animate-pulse'
-            }`}
-            title={isDownloadLocked ? 'Subscribe to unlock downloads' : 'Download your resume'}
-          >
-            {isDownloadLocked ? (
-              <><MdLock className="w-4 h-4" /> Subscribe to Download</>
-            ) : (
-              <><MdDownload className="w-4 h-4" /> Download</>
-            )}
-          </button>
+  onClick={() => {
+    if (isDownloadLocked) {
+      // Show message explaining they need to pay $1
+      toast.error('💳 You must pay $1 for the 14-day trial to download your resume');
+      navigate('/pricing?source=download');
+      return;
+    }
+    setShowExport(true);
+  }}
+  className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
+    !isDownloadLocked
+      ? 'text-white bg-blue-600 hover:bg-blue-700'
+      : 'text-white bg-orange-500 hover:bg-orange-600 animate-pulse'
+  }`}
+  title={isDownloadLocked ? 'Pay $1 to unlock downloads' : 'Download your resume'}
+>
+  {isDownloadLocked ? (
+    <><MdLock className="w-4 h-4" /> Pay $1 to Download</>
+  ) : (
+    <><MdDownload className="w-4 h-4" /> Download</>
+  )}
+</button>
         </div>
       </div>
 
