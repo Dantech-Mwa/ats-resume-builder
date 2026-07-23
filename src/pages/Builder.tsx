@@ -60,6 +60,7 @@ const Builder: React.FC = () => {
   const { currentResume, createNewResume, saveResume, isDirty, setCurrentResume } = useResume();
   const { atsScore, setATSScore, setAIRecommendations, setAILoading, aiLoading } = useAI();
   const { setExportLoading } = useExport();
+  const { user } = useAuth();
 
   // State
   const [showExport, setShowExport] = useState(false);
@@ -76,7 +77,6 @@ const Builder: React.FC = () => {
   const [autoLearn, setAutoLearn] = useState(true);
   
   const isUpload = searchParams.get('upload') === 'true';
-  const { user } = useAuth();
 
   // ============================================
   // LIFECYCLE EFFECTS
@@ -98,7 +98,6 @@ const Builder: React.FC = () => {
   }, [currentResume, pageLoaded, createNewResume]);
 
   useEffect(() => {
-    // Load parser stats on mount
     loadParserStats();
   }, []);
 
@@ -128,7 +127,6 @@ const Builder: React.FC = () => {
       const parser = ResumeParser.getInstance();
       const aiService = AIService.getInstance();
 
-      // Parse with ML
       const result = await parser.parseFile(file);
 
       if (!result.success) {
@@ -143,7 +141,6 @@ const Builder: React.FC = () => {
       const templateType = result.templateType || 'unknown';
       const requiresReview = result.requiresReview || false;
 
-      // Log parsed data for debugging
       console.log('📦 ML PARSED SECTIONS:');
       console.log('  Confidence:', Math.round(confidence * 100) + '%');
       console.log('  Template:', templateType);
@@ -151,23 +148,16 @@ const Builder: React.FC = () => {
       console.log('  Contact:', parsed.contact?.fullName, parsed.contact?.email);
       console.log('  Summary:', parsed.summary?.content?.substring(0, 100));
       console.log('  Experience:', parsed.experience?.length, 'entries');
-      parsed.experience?.forEach((e: any, i: number) => console.log(`    [${i}] ${e.position} @ ${e.company} | ${e.startDate}-${e.endDate} | achievements: ${e.achievements?.length}`));
       console.log('  Education:', parsed.education?.length, 'entries');
-      console.log('  Skills - tech:', parsed.skills?.technical?.length, 'soft:', parsed.skills?.soft?.length, 'tools:', parsed.skills?.tools?.length);
-      console.log('  Projects:', parsed.projects?.length);
-      console.log('  Certifications:', parsed.certifications?.length);
-      console.log('  Languages:', parsed.languages?.length);
+      console.log('  Skills:', parsed.skills?.technical?.length, 'tech skills');
       console.log('  Suggestions:', suggestions.length);
 
-      // Store ML suggestions for display
       setMLSuggestions(suggestions);
       setMLConfidence(confidence);
 
-      // BUILD COMPLETE RESUME OBJECT FROM PARSED DATA
       const fullResume = {
         ...currentResume!,
         sections: {
-          // CONTACT
           contact: {
             fullName: parsed.contact?.fullName || '',
             email: parsed.contact?.email || '',
@@ -178,13 +168,11 @@ const Builder: React.FC = () => {
             portfolio: parsed.contact?.portfolio || '',
             github: parsed.contact?.github || '',
           },
-          // SUMMARY
           summary: {
             content: parsed.summary?.content || '',
             aiOptimized: false,
             lastModified: new Date().toISOString(),
           },
-          // EXPERIENCE - Direct from parser
           experience: (parsed.experience || []).map((exp: any) => ({
             id: exp.id || crypto.randomUUID(),
             company: exp.company || '',
@@ -198,7 +186,6 @@ const Builder: React.FC = () => {
             technologies: exp.technologies || [],
             aiSuggestions: [],
           })),
-          // EDUCATION - Direct from parser
           education: (parsed.education || []).map((edu: any) => ({
             id: edu.id || crypto.randomUUID(),
             institution: edu.institution || '',
@@ -211,7 +198,6 @@ const Builder: React.FC = () => {
             activities: edu.activities || [],
             relevantCourses: edu.relevantCourses || [],
           })),
-          // SKILLS - Direct from parser
           skills: {
             technical: (parsed.skills?.technical || []).map((s: any) => ({
               name: s.name || s,
@@ -239,7 +225,6 @@ const Builder: React.FC = () => {
               category: s.category || 'Other',
             })),
           },
-          // CERTIFICATIONS
           certifications: (parsed.certifications || []).map((cert: any) => ({
             id: cert.id || crypto.randomUUID(),
             name: cert.name || '',
@@ -250,7 +235,6 @@ const Builder: React.FC = () => {
             credentialUrl: cert.credentialUrl || '',
             inProgress: cert.inProgress || false,
           })),
-          // PROJECTS
           projects: (parsed.projects || []).map((proj: any) => ({
             id: proj.id || crypto.randomUUID(),
             name: proj.name || '',
@@ -264,12 +248,10 @@ const Builder: React.FC = () => {
             achievements: proj.achievements || [],
             role: proj.role || '',
           })),
-          // LANGUAGES
           languages: (parsed.languages || []).map((lang: any) => ({
             name: lang.name || '',
             proficiency: lang.proficiency || 'Intermediate',
           })),
-          // Keep empty arrays for sections not parsed
           volunteer: currentResume?.sections.volunteer || [],
           publications: currentResume?.sections.publications || [],
           awards: currentResume?.sections.awards || [],
@@ -284,42 +266,37 @@ const Builder: React.FC = () => {
           templateType: templateType,
           requiresReview: requiresReview,
         },
+        rawText: result.rawText,
       };
 
-      // SET THE ENTIRE RESUME AT ONCE
       setCurrentResume(fullResume);
       
       const expCount = parsed.experience?.length || 0;
       const eduCount = parsed.education?.length || 0;
       const skillCount = (parsed.skills?.technical?.length || 0) + (parsed.skills?.soft?.length || 0);
       
-      // Show appropriate toast message based on confidence
       if (confidence > 0.8) {
-  toast.success(`✅ Auto-populated with high confidence! ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
-} else if (confidence > 0.6) {
-  toast.success(`📝 Auto-populated with medium confidence. ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
-  toast('💡 Review suggested corrections below', { duration: 5000 }); // FIXED: Changed from toast.info to toast
-  setShowMLSuggestions(true);
-} else {
-  toast.error(`⚠️ Low confidence parse. Please review and correct.`);
-  toast('💡 Use AI suggestions to improve parsing', { duration: 5000 }); // FIXED: Changed from toast.info to toast
-  setShowMLSuggestions(true);
-}
+        toast.success(`✅ Auto-populated with high confidence! ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
+      } else if (confidence > 0.6) {
+        toast.success(`📝 Auto-populated with medium confidence. ${expCount} jobs, ${eduCount} degrees, ${skillCount} skills`);
+        toast('💡 Review suggested corrections below', { duration: 5000 });
+        setShowMLSuggestions(true);
+      } else {
+        toast.error(`⚠️ Low confidence parse. Please review and correct.`);
+        toast('💡 Use AI suggestions to improve parsing', { duration: 5000 });
+        setShowMLSuggestions(true);
+      }
 
-      // Show suggestions if there are any
       if (suggestions.length > 0) {
         setShowMLSuggestions(true);
       }
 
-      // Score the raw text with ATS
       await analyzeResume(result.rawText);
 
-      // Auto-learn from successful parse (if confidence is high)
       if (autoLearn && confidence > 0.7) {
         await autoLearnFromParse(result, fullResume);
       }
 
-      // Store parse history
       setParseHistory(prev => [...prev, {
         timestamp: new Date().toISOString(),
         confidence,
@@ -328,7 +305,6 @@ const Builder: React.FC = () => {
         suggestions: suggestions.length,
       }]);
 
-      // Update stats
       loadParserStats();
 
     } catch (error: any) {
@@ -352,7 +328,7 @@ const Builder: React.FC = () => {
         sections: result.parsed,
         templateType: result.templateType || 'unknown',
         confidence: result.confidence || 0.5,
-        corrections: result.parsed, // Use parsed data as correction for learning
+        corrections: result.parsed,
         timestamp: new Date().toISOString()
       };
       
@@ -368,13 +344,12 @@ const Builder: React.FC = () => {
   // ============================================
 
   const handleUserCorrection = async (correctedSections: any) => {
-    if (!currentResume || !parsing) return;
+    if (!currentResume) return;
 
     try {
       const parser = ResumeParser.getInstance();
       const aiService = AIService.getInstance();
 
-      // Learn from correction
       await parser.learnFromCorrection(
         currentResume.rawText || '',
         currentResume.sections,
@@ -382,7 +357,6 @@ const Builder: React.FC = () => {
         currentResume.metadata.templateType || 'unknown'
       );
 
-      // Update resume with corrections
       setCurrentResume({
         ...currentResume,
         sections: correctedSections,
@@ -393,7 +367,6 @@ const Builder: React.FC = () => {
         }
       });
 
-      // Update AI service as well
       await aiService.learnFromCorrection(
         currentResume.rawText || '',
         currentResume.sections,
@@ -402,14 +375,8 @@ const Builder: React.FC = () => {
       );
 
       toast.success('✅ Correction learned! The parser will improve over time.');
-
-      // Re-analyze with corrected data
       await handleReAnalyze();
-
-      // Update stats
       loadParserStats();
-
-      // Clear suggestions
       setMLSuggestions([]);
       setShowMLSuggestions(false);
 
@@ -431,11 +398,9 @@ const Builder: React.FC = () => {
       const recs = await aiService.getRecommendations(resumeText, score);
       setAIRecommendations(recs || []);
       
-      // Show ML-enhanced recommendations
       const parser = ResumeParser.getInstance();
       const parserStats = parser.getParserStats();
       
-      // Toast with ML confidence
       const mlConfidence = parserStats?.averageConfidence || 0;
       const confidenceMsg = mlConfidence > 0.7 
         ? '🎯 ML model confidence: ' + Math.round(mlConfidence * 100) + '%'
@@ -515,7 +480,6 @@ const Builder: React.FC = () => {
       const parser = ResumeParser.getInstance();
       const aiService = AIService.getInstance();
       
-      // Get all corrections from history
       const history = JSON.parse(localStorage.getItem('resumeParserCorrectionHistory') || '[]');
       
       if (history.length === 0) {
@@ -584,52 +548,49 @@ const Builder: React.FC = () => {
   // EXPORT
   // ============================================
 
- const handleExport = async (format: string) => {
-  if (!currentResume) {
-    toast.error('No resume to export');
-    return;
-  }
+  const handleExport = async (format: string) => {
+    if (!currentResume) {
+      toast.error('No resume to export');
+      return;
+    }
 
-  // 🔒 CHECK SUBSCRIPTION
-  const { user } = useAuth();
-  const subscription = user?.subscription;
-  
-  if (!subscription || subscription.status !== 'active') {
-    toast.error('Subscription required to download');
-    // Redirect to pricing
-    navigate('/pricing');
-    return;
-  }
+    // Check subscription
+    const subscription = user?.subscription;
+    
+    if (!subscription || subscription.status !== 'active') {
+      toast.error('Subscription required to download');
+      navigate('/pricing');
+      return;
+    }
 
-  // Check if subscription is expired
-  const endDate = new Date(subscription.endDate);
-  if (endDate < new Date()) {
-    toast.error('Your subscription has expired. Please renew.');
-    navigate('/pricing');
-    return;
-  }
+    // Check if subscription is expired
+    const endDate = new Date(subscription.endDate);
+    if (endDate < new Date()) {
+      toast.error('Your subscription has expired. Please renew.');
+      navigate('/pricing');
+      return;
+    }
 
-  // ✅ Subscription valid - allow download
-  setExportLoading(true);
-  try {
-    const generator = ResumeGenerator.getInstance();
-    await generator.downloadResume(currentResume, {
-      format: format as any,
-      templateId: currentResume.metadata.templateId,
-      includeAISuggestions: false,
-      includeATSScore: true,
-      pageSize: 'A4',
-      margins: 'normal',
-      fontSize: 'normal',
-    });
-    toast.success(`Resume exported as ${format.toUpperCase()}!`);
-    setShowExport(false);
-  } catch (error: any) {
-    toast.error(error.message || 'Export failed');
-  } finally {
-    setExportLoading(false);
-  }
-};
+    setExportLoading(true);
+    try {
+      const generator = ResumeGenerator.getInstance();
+      await generator.downloadResume(currentResume, {
+        format: format as any,
+        templateId: currentResume.metadata.templateId,
+        includeAISuggestions: false,
+        includeATSScore: true,
+        pageSize: 'A4',
+        margins: 'normal',
+        fontSize: 'normal',
+      });
+      toast.success(`Resume exported as ${format.toUpperCase()}!`);
+      setShowExport(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Export failed');
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   // ============================================
   // RENDER ML SUGGESTIONS PANEL
@@ -841,54 +802,36 @@ const Builder: React.FC = () => {
           >
             <MdSave className="w-4 h-4"/> Save
           </button>
-          <div className="flex items-center gap-2">
-  {/* Show subscription badge */}
-  {user?.subscription?.plan === 'trial' && (
-    <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
-      Trial - {Math.ceil((new Date(user.subscription.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days left
-    </span>
-  )}
-  
-  <button onClick={() => setShowUpload(true)} className="...">
-    <MdCloudUpload className="w-4 h-4"/> Upload
-  </button>
-  <button onClick={handleReAnalyze} disabled={aiLoading} className="...">
-    <MdAutoAwesome className="w-4 h-4"/> {aiLoading?'Analyzing...':'Re-analyze'}
-  </button>
-  <button onClick={saveResume} className="...">
-    <MdSave className="w-4 h-4"/> Save
-  </button>
-  
-  {/* 🔒 Download - locked if no subscription */}
-  <button 
-    onClick={() => {
-      if (!user?.subscription || user.subscription.status !== 'active' || new Date(user.subscription.endDate) < new Date()) {
-        toast.error('Subscribe to download your resume');
-        navigate('/pricing');
-        return;
-      }
-      setShowExport(true);
-    }} 
-    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg ${
-      user?.subscription?.status === 'active' && new Date(user.subscription.endDate) > new Date()
-        ? 'text-white bg-blue-600 hover:bg-blue-700'
-        : 'text-gray-400 bg-gray-100 cursor-not-allowed'
-    }`}
-    title={!user?.subscription ? 'Subscribe to unlock downloads' : ''}
-  >
-    {user?.subscription?.status === 'active' ? (
-      <MdDownload className="w-4 h-4"/>
-    ) : (
-      '🔒'
-    )}
-    Download
-  </button>
-</div>
-          <button
-            onClick={() => setShowExport(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+          
+          {/* 🔒 Download - locked if no subscription */}
+          {user?.subscription?.plan === 'trial' && (
+            <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+              Trial - {Math.ceil((new Date(user.subscription.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days left
+            </span>
+          )}
+          
+          <button 
+            onClick={() => {
+              if (!user?.subscription || user.subscription.status !== 'active' || new Date(user.subscription.endDate) < new Date()) {
+                toast.error('Subscribe to download your resume');
+                navigate('/pricing');
+                return;
+              }
+              setShowExport(true);
+            }} 
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg ${
+              user?.subscription?.status === 'active' && new Date(user.subscription.endDate) > new Date()
+                ? 'text-white bg-blue-600 hover:bg-blue-700'
+                : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+            }`}
+            title={!user?.subscription ? 'Subscribe to unlock downloads' : ''}
           >
-            <MdDownload className="w-4 h-4"/> Download
+            {user?.subscription?.status === 'active' ? (
+              <MdDownload className="w-4 h-4"/>
+            ) : (
+              '🔒'
+            )}
+            Download
           </button>
         </div>
       </div>
