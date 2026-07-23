@@ -844,7 +844,7 @@ const getSubscriptionStatus = useCallback(() => {
   onClick={() => {
     if (isDownloadLocked) {
       // Show message explaining they need to pay $1
-      toast.error('💳 Pay $1 for 14-day trial to download your resume'');
+      toast.error('💳 Pay $1 for 14-day trial to download your resume');
       navigate('/pricing?source=download');
       return;
     }
