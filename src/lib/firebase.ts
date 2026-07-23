@@ -165,6 +165,7 @@ class FirebaseAuthService {
           amount: 0, // ✅ $0 - Free trial
           currency: 'USD',
           autoRenew: false,
+          isPaid: false, 
         },
         savedResumes: [],
         createdAt: new Date().toISOString(),
