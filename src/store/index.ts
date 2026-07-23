@@ -1,5 +1,7 @@
+// src/store/index.ts
 // ============================================
-// ZUSTAND STORE - Complete State Management (FIXED)
+// ZUSTAND STORE - Complete State Management
+// WITH PAY-TO-DOWNLOAD FLOW
 // ============================================
 
 import { create } from 'zustand';
@@ -117,6 +119,12 @@ interface AppStore {
 
   resetStore: () => void;
   getResumeText: () => string;
+
+  // ✅ NEW: Subscription helper methods
+  hasActiveSubscription: () => boolean;
+  getSubscriptionDaysRemaining: () => number;
+  isSubscriptionExpired: () => boolean;
+  getSubscriptionStatus: () => 'active' | 'expired' | 'none';
 }
 
 // ============================================
@@ -168,6 +176,7 @@ const initialResumeData = (title?: string): ResumeData => ({
   },
   atsScore: null,
   aiRecommendations: [],
+  rawText: '', // ✅ Added for parser
 });
 
 const initialUIState: UIState = {
@@ -228,6 +237,46 @@ const useStore = create<AppStore>()(
       maxUndoSteps: 50,
 
       // ============================================
+      // ✅ SUBSCRIPTION HELPER METHODS
+      // ============================================
+
+      hasActiveSubscription: () => {
+        const state = get();
+        const subscription = state.user?.subscription;
+        if (!subscription) return false;
+        if (subscription.status !== 'active') return false;
+        const endDate = new Date(subscription.endDate);
+        return endDate > new Date();
+      },
+
+      getSubscriptionDaysRemaining: () => {
+        const state = get();
+        const subscription = state.user?.subscription;
+        if (!subscription || subscription.status !== 'active') return 0;
+        const endDate = new Date(subscription.endDate);
+        const now = new Date();
+        return Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      },
+
+      isSubscriptionExpired: () => {
+        const state = get();
+        const subscription = state.user?.subscription;
+        if (!subscription) return true;
+        const endDate = new Date(subscription.endDate);
+        return endDate < new Date();
+      },
+
+      getSubscriptionStatus: () => {
+        const state = get();
+        const subscription = state.user?.subscription;
+        if (!subscription) return 'none';
+        if (subscription.status !== 'active') return 'none';
+        const endDate = new Date(subscription.endDate);
+        if (endDate < new Date()) return 'expired';
+        return 'active';
+      },
+
+      // ============================================
       // AUTH ACTIONS
       // ============================================
 
@@ -263,6 +312,7 @@ const useStore = create<AppStore>()(
           user: state.user ? { ...state.user, ...updates } : null,
         })),
 
+      // ✅ UPDATED: Update subscription with full object
       updateSubscription: (subscription) =>
         set((state) => ({
           user: state.user ? { ...state.user, subscription } : null,
@@ -833,7 +883,26 @@ export const useAuth = () => {
   const updateProfile = useStore((s) => s.updateUserProfile);
   const setAuthLoading = useStore((s) => s.setAuthLoading);
   const setAuthError = useStore((s) => s.setAuthError);
-  return { user, isAuthenticated, loading, error, login, logout, updateProfile, setAuthLoading, setAuthError };
+  // ✅ NEW: Subscription helpers
+  const hasActiveSubscription = useStore((s) => s.hasActiveSubscription);
+  const getSubscriptionDaysRemaining = useStore((s) => s.getSubscriptionDaysRemaining);
+  const getSubscriptionStatus = useStore((s) => s.getSubscriptionStatus);
+  const isSubscriptionExpired = useStore((s) => s.isSubscriptionExpired);
+  return {
+    user,
+    isAuthenticated,
+    loading,
+    error,
+    login,
+    logout,
+    updateProfile,
+    setAuthLoading,
+    setAuthError,
+    hasActiveSubscription,
+    getSubscriptionDaysRemaining,
+    getSubscriptionStatus,
+    isSubscriptionExpired,
+  };
 };
 
 export const useResume = () => {
@@ -854,10 +923,22 @@ export const useResume = () => {
   const setResumeError = useStore((s) => s.setResumeError);
   const setDirty = useStore((s) => s.setDirty);
   return {
-    currentResume, savedResumes, loading, isDirty,
-    setCurrentResume, createNewResume, updateSection,
-    addItem, updateItem, removeItem, saveResume, deleteResume,
-    loadResume, setResumeLoading, setResumeError, setDirty,
+    currentResume,
+    savedResumes,
+    loading,
+    isDirty,
+    setCurrentResume,
+    createNewResume,
+    updateSection,
+    addItem,
+    updateItem,
+    removeItem,
+    saveResume,
+    deleteResume,
+    loadResume,
+    setResumeLoading,
+    setResumeError,
+    setDirty,
   };
 };
 
@@ -879,10 +960,22 @@ export const useAI = () => {
   const clearChat = useStore((s) => s.clearChat);
   const setJobDescription = useStore((s) => s.setJobDescription);
   return {
-    atsScore, recommendations, loading, aiLoading, error,
-    chatMessages, jobDescription, setATSScore, setRecommendations,
-    setAIRecommendations, setAILoading, applyRecommendation,
-    dismissRecommendation, addChatMessage, clearChat, setJobDescription,
+    atsScore,
+    recommendations,
+    loading,
+    aiLoading,
+    error,
+    chatMessages,
+    jobDescription,
+    setATSScore,
+    setRecommendations,
+    setAIRecommendations,
+    setAILoading,
+    applyRecommendation,
+    dismissRecommendation,
+    addChatMessage,
+    clearChat,
+    setJobDescription,
   };
 };
 
@@ -896,7 +989,17 @@ export const useUI = () => {
   const addToast = useStore((s) => s.addToast);
   const removeToast = useStore((s) => s.removeToast);
   const setGlobalLoading = useStore((s) => s.setGlobalLoading);
-  return { ui, toggleSidebar, openModal, closeModal, setTheme, addNotification, addToast, removeToast, setGlobalLoading };
+  return {
+    ui,
+    toggleSidebar,
+    openModal,
+    closeModal,
+    setTheme,
+    addNotification,
+    addToast,
+    removeToast,
+    setGlobalLoading,
+  };
 };
 
 export const useTemplates = () => {
@@ -904,7 +1007,12 @@ export const useTemplates = () => {
   const availableTemplates = useStore((s) => s.availableTemplates);
   const setSelectedTemplate = useStore((s) => s.setSelectedTemplate);
   const setAvailableTemplates = useStore((s) => s.setAvailableTemplates);
-  return { selectedTemplate, availableTemplates, setSelectedTemplate, setAvailableTemplates };
+  return {
+    selectedTemplate,
+    availableTemplates,
+    setSelectedTemplate,
+    setAvailableTemplates,
+  };
 };
 
 export const usePayment = () => {
@@ -913,7 +1021,13 @@ export const usePayment = () => {
   const history = useStore((s) => s.paymentHistory);
   const addPayment = useStore((s) => s.addPaymentToHistory);
   const updateSubscription = useStore((s) => s.updateSubscription);
-  return { loading, error, history, addPayment, updateSubscription };
+  return {
+    loading,
+    error,
+    history,
+    addPayment,
+    updateSubscription,
+  };
 };
 
 export const useExport = () => {
@@ -924,7 +1038,15 @@ export const useExport = () => {
   const setExportLoading = useStore((s) => s.setExportLoading);
   const setError = useStore((s) => s.setExportError);
   const setConfig = useStore((s) => s.setLastExportConfig);
-  return { loading, error, lastConfig, setLoading, setExportLoading, setError, setConfig };
+  return {
+    loading,
+    error,
+    lastConfig,
+    setLoading,
+    setExportLoading,
+    setError,
+    setConfig,
+  };
 };
 
 export const useUndoRedo = () => {
@@ -933,5 +1055,11 @@ export const useUndoRedo = () => {
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
   const clearHistory = useStore((s) => s.clearHistory);
-  return { canUndo, canRedo, undo, redo, clearHistory };
+  return {
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    clearHistory,
+  };
 };
