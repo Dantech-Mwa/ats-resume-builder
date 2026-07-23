@@ -1,5 +1,7 @@
+// src/lib/firebase.ts
 // ============================================
 // FIREBASE SERVICES - REALTIME DATABASE VERSION
+// WITH PAY-TO-DOWNLOAD FLOW
 // ============================================
 
 import { auth, realtimeDb, storage, googleProvider } from '../config/firebase';
@@ -66,8 +68,8 @@ class FirebaseAuthService {
           startDate: new Date().toISOString(),
           endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
           paymentMethod: 'none',
-          status: 'active',
-          amount: 1,
+          status: 'active', // ✅ Active - User can use builder
+          amount: 0, // ✅ $0 - Free trial (changed from 1)
           currency: 'USD',
           autoRenew: false,
         },
@@ -158,8 +160,8 @@ class FirebaseAuthService {
           startDate: new Date().toISOString(),
           endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
           paymentMethod: 'none',
-          status: 'active',
-          amount: 1,
+          status: 'active', // ✅ Active - User can use builder
+          amount: 0, // ✅ $0 - Free trial
           currency: 'USD',
           autoRenew: false,
         },
@@ -222,6 +224,39 @@ class FirebaseAuthService {
       subscription,
       updatedAt: new Date().toISOString(),
     });
+  }
+
+  // ✅ NEW: Check if user has active subscription
+  async hasActiveSubscription(userId: string): Promise<boolean> {
+    try {
+      const snapshot = await get(ref(realtimeDb, 'users/' + userId + '/subscription'));
+      if (!snapshot.exists()) return false;
+      
+      const subscription = snapshot.val() as Subscription;
+      if (subscription.status !== 'active') return false;
+      
+      const endDate = new Date(subscription.endDate);
+      return endDate > new Date();
+    } catch {
+      return false;
+    }
+  }
+
+  // ✅ NEW: Get subscription days remaining
+  async getSubscriptionDaysRemaining(userId: string): Promise<number> {
+    try {
+      const snapshot = await get(ref(realtimeDb, 'users/' + userId + '/subscription'));
+      if (!snapshot.exists()) return 0;
+      
+      const subscription = snapshot.val() as Subscription;
+      if (subscription.status !== 'active') return 0;
+      
+      const endDate = new Date(subscription.endDate);
+      const now = new Date();
+      return Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    } catch {
+      return 0;
+    }
   }
 }
 
@@ -319,17 +354,20 @@ class FirebaseDatabaseService {
     return await this.saveResume(userId, newResume);
   }
 
+  // ✅ UPDATED: Save payment and update subscription
   async savePayment(userId: string, paymentDetails: PaymentDetails): Promise<void> {
-    const paymentId = paymentDetails.transactionId;
+    const paymentId = paymentDetails.transactionId || uuidv4();
     await set(ref(realtimeDb, 'payments/' + paymentId), {
       userId,
       ...paymentDetails,
+      id: paymentId,
       createdAt: new Date().toISOString(),
     });
 
+    // ✅ If payment completed, update subscription
     if (paymentDetails.status === 'completed') {
       const subscription = this.calculateSubscription(paymentDetails.planId);
-      await update(ref(realtimeDb, 'users/' + userId), { subscription });
+      await authService.updateSubscription(userId, subscription);
     }
   }
 
@@ -351,31 +389,89 @@ class FirebaseDatabaseService {
     );
   }
 
+  // ✅ UPDATED: Calculate subscription based on plan
   private calculateSubscription(planId: string): Subscription {
     const now = new Date();
     let endDate: Date;
+    let amount: number;
 
     switch (planId) {
       case 'trial':
         endDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+        amount = 1; // $1 trial
         return {
-          plan: 'trial', startDate: now.toISOString(), endDate: endDate.toISOString(),
-          paymentMethod: 'paypal', status: 'active', amount: 1, currency: 'USD', autoRenew: false,
+          plan: 'trial',
+          startDate: now.toISOString(),
+          endDate: endDate.toISOString(),
+          paymentMethod: 'paypal',
+          status: 'active',
+          amount: amount,
+          currency: 'USD',
+          autoRenew: false,
         };
       case 'monthly':
         endDate = new Date(now.setMonth(now.getMonth() + 1));
+        amount = 14.99; // $14.99 monthly
         return {
-          plan: 'monthly', startDate: now.toISOString(), endDate: endDate.toISOString(),
-          paymentMethod: 'paypal', status: 'active', amount: 5, currency: 'USD', autoRenew: true,
+          plan: 'monthly',
+          startDate: now.toISOString(),
+          endDate: endDate.toISOString(),
+          paymentMethod: 'paypal',
+          status: 'active',
+          amount: amount,
+          currency: 'USD',
+          autoRenew: true,
         };
       case 'yearly':
         endDate = new Date(now.setFullYear(now.getFullYear() + 1));
+        amount = 89.99; // $89.99 yearly
         return {
-          plan: 'yearly', startDate: now.toISOString(), endDate: endDate.toISOString(),
-          paymentMethod: 'paypal', status: 'active', amount: 50, currency: 'USD', autoRenew: true,
+          plan: 'yearly',
+          startDate: now.toISOString(),
+          endDate: endDate.toISOString(),
+          paymentMethod: 'paypal',
+          status: 'active',
+          amount: amount,
+          currency: 'USD',
+          autoRenew: true,
         };
       default:
-        throw new Error('Invalid plan ID');
+        // Default to trial if unknown
+        endDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+        return {
+          plan: 'trial',
+          startDate: now.toISOString(),
+          endDate: endDate.toISOString(),
+          paymentMethod: 'none',
+          status: 'active',
+          amount: 0,
+          currency: 'USD',
+          autoRenew: false,
+        };
+    }
+  }
+
+  // ✅ NEW: Get subscription by user ID
+  async getSubscription(userId: string): Promise<Subscription | null> {
+    try {
+      const snapshot = await get(ref(realtimeDb, 'users/' + userId + '/subscription'));
+      return snapshot.exists() ? (snapshot.val() as Subscription) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ✅ NEW: Check if user has valid subscription for download
+  async canDownload(userId: string): Promise<boolean> {
+    try {
+      const subscription = await this.getSubscription(userId);
+      if (!subscription) return false;
+      if (subscription.status !== 'active') return false;
+      
+      const endDate = new Date(subscription.endDate);
+      return endDate > new Date();
+    } catch {
+      return false;
     }
   }
 }
