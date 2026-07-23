@@ -2,11 +2,12 @@
 // ============================================
 // PAYMENT MODAL - PayPal Integration with Real Buttons
 // Pay-to-Download Flow: After payment, update subscription
+// WITH TRIAL-SPECIFIC MESSAGING
 // ============================================
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { MdLock, MdPayment, MdCheckCircle, MdError, MdDownload, MdPerson } from 'react-icons/md';
+import { MdLock, MdPayment, MdCheckCircle, MdError, MdDownload, MdPerson, MdRocket } from 'react-icons/md';
 import { FaPaypal, FaStripe } from 'react-icons/fa';
 import Modal from './Modal';
 import Loading from './Loading';
@@ -19,7 +20,7 @@ interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   planId: string;
-  onSuccess?: () => void; // ✅ NEW: Callback for successful payment
+  onSuccess?: () => void;
 }
 
 // PayPal Hosted Button IDs
@@ -53,18 +54,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const plan = PRICING_PLANS.find((p) => p.id === planId);
   const containerId = PAYPAL_CONTAINER_IDS[planId] || PAYPAL_CONTAINER_IDS.trial;
   const buttonId = PAYPAL_BUTTON_IDS[planId] || PAYPAL_BUTTON_IDS.trial;
+  
+  // ✅ Check if this is a trial plan
+  const isTrial = planId === 'trial';
 
   // Load PayPal SDK
   useEffect(() => {
     if (paymentMethod === 'paypal' && isOpen && !paypalScriptLoaded.current) {
-      // Remove any existing PayPal scripts
       const existingScript = document.querySelector('script[src*="paypal.com/sdk/js"]');
       if (existingScript) {
         existingScript.remove();
         paypalScriptLoaded.current = false;
       }
 
-      // Load PayPal SDK with Hosted Buttons
       const script = document.createElement('script');
       script.src = `https://www.paypal.com/sdk/js?client-id=BAA6-pKbrnpOaKuvEMkQ8nG3vEociOmnS3OVnp_oPANPNefmj3dPjrXcVvoKrr3prhADRZ4TY1jidZlNOQ&components=hosted-buttons&disable-funding=venmo&currency=USD`;
       script.async = true;
@@ -73,14 +75,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         console.log('✅ PayPal SDK loaded');
         paypalScriptLoaded.current = true;
         
-        // Render the PayPal button
         try {
           if ((window as any).paypal?.HostedButtons) {
             (window as any).paypal.HostedButtons({
               hostedButtonId: buttonId,
               onApprove: (data: any) => {
                 console.log('✅ PayPal payment approved:', data);
-                // ✅ Payment successful - update subscription
                 handlePayPalSuccess(data);
               },
               onCancel: () => {
@@ -111,7 +111,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
 
     return () => {
-      // Cleanup - remove PayPal scripts when modal closes
       if (!isOpen) {
         const script = document.querySelector('script[src*="paypal.com/sdk/js"]');
         if (script) {
@@ -123,7 +122,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   }, [paymentMethod, isOpen, planId, containerId, buttonId]);
 
   // ============================================
-  // ✅ HANDLE PAYPAL SUCCESS
+  // HANDLE PAYPAL SUCCESS
   // ============================================
 
   const handlePayPalSuccess = async (data: any) => {
@@ -136,7 +135,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     setPaymentError(null);
 
     try {
-      // Create payment record
       const paymentDetails = {
         planId: planId,
         amount: plan?.price || 0,
@@ -148,10 +146,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         completedAt: new Date().toISOString(),
       };
 
-      // ✅ 1. Add payment to local state
       addPayment(paymentDetails);
 
-      // ✅ 2. Calculate subscription
       const now = new Date();
       let endDate = new Date();
       let amount = plan?.price || 0;
@@ -187,10 +183,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         isPaid: true,
       };
 
-      // ✅ 3. Update local state
       updateSubscription(subscription);
 
-      // ✅ 4. Save payment and subscription to Firebase
       try {
         await databaseService.savePayment(user.id, paymentDetails);
         await authService.updateSubscription(user.id, subscription);
@@ -200,14 +194,18 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
 
       setSuccess(true);
-      toast.success(`✅ ${plan?.name || 'Plan'} activated! You can now download your resume.`);
+      
+      // ✅ Trial-specific success message
+      if (isTrial) {
+        toast.success(`✅ 14-Day Trial Activated! You can now download your resume.`);
+      } else {
+        toast.success(`✅ ${plan?.name || 'Plan'} activated! You can now download your resume.`);
+      }
 
-      // ✅ 5. Call onSuccess callback
       if (onSuccess) {
         onSuccess();
       }
 
-      // ✅ 6. Close modal after delay
       setTimeout(() => {
         onClose();
         setSuccess(false);
@@ -223,7 +221,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   // ============================================
-  // ✅ HANDLE STRIPE PAYMENT
+  // HANDLE STRIPE PAYMENT
   // ============================================
 
   const handleStripePayment = async () => {
@@ -236,10 +234,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     setPaymentError(null);
 
     try {
-      // Simulate Stripe payment processing
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      // Create payment record
       const paymentDetails = {
         planId: planId,
         amount: plan?.price || 0,
@@ -251,10 +247,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         completedAt: new Date().toISOString(),
       };
 
-      // ✅ 1. Add payment to local state
       addPayment(paymentDetails);
 
-      // ✅ 2. Calculate subscription
       const now = new Date();
       let endDate = new Date();
       let amount = plan?.price || 0;
@@ -287,12 +281,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         currency: 'USD',
         autoRenew: plan?.duration !== 'trial',
         paymentId: paymentDetails.transactionId,
+        isPaid: true,
       };
 
-      // ✅ 3. Update local state
       updateSubscription(subscription);
 
-      // ✅ 4. Save payment and subscription to Firebase
       try {
         await databaseService.savePayment(user.id, paymentDetails);
         await authService.updateSubscription(user.id, subscription);
@@ -302,14 +295,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
 
       setSuccess(true);
-      toast.success(`✅ ${plan?.name || 'Plan'} activated! You can now download your resume.`);
+      
+      if (isTrial) {
+        toast.success(`✅ 14-Day Trial Activated! You can now download your resume.`);
+      } else {
+        toast.success(`✅ ${plan?.name || 'Plan'} activated! You can now download your resume.`);
+      }
 
-      // ✅ 5. Call onSuccess callback
       if (onSuccess) {
         onSuccess();
       }
 
-      // ✅ 6. Close modal after delay
       setTimeout(() => {
         onClose();
         setSuccess(false);
@@ -330,7 +326,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={success ? '🎉 Payment Successful!' : 'Complete Your Purchase'}
+      title={success ? '🎉 Payment Successful!' : isTrial ? '🚀 Start Your 14-Day Trial' : 'Complete Your Purchase'}
       size="md"
       showCloseButton={!processing && !success}
       closeOnOverlay={!processing && !success}
@@ -340,15 +336,20 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"
+            className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${
+              isTrial ? 'bg-green-100' : 'bg-green-100'
+            }`}
           >
-            <MdCheckCircle className="w-10 h-10 text-green-600" />
+            <MdCheckCircle className={`w-10 h-10 ${isTrial ? 'text-green-600' : 'text-green-600'}`} />
           </motion.div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            Thank You!
+            {isTrial ? '🎉 Trial Activated!' : 'Thank You!'}
           </h3>
           <p className="text-gray-500">
-            Your <span className="font-semibold">{plan.name}</span> subscription is now active.
+            {isTrial 
+              ? 'Your 14-day trial is now active!'
+              : `Your <span className="font-semibold">${plan.name}</span> subscription is now active.`
+            }
           </p>
           <p className="text-sm text-green-600 mt-2">
             ✅ You can now download your resume from the builder!
@@ -365,35 +366,64 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         </div>
       ) : (
         <div className="space-y-6">
-          {/* ✅ Download reminder for pay-to-download flow */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <MdDownload className="w-5 h-5 text-blue-600" />
-              <div>
-                <p className="text-sm font-medium text-blue-800">
-                  🔓 Unlock resume downloads
-                </p>
-                <p className="text-xs text-blue-600">
-                  Subscribe to download your resume in PDF, DOCX, or TXT format
-                </p>
+          {/* ✅ TRIAL-SPECIFIC BANNER */}
+          {isTrial ? (
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <MdRocket className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-green-800">🚀 14-Day Trial</p>
+                  <p className="text-sm text-green-700">
+                    Pay just <span className="font-bold text-xl">$1</span> for full access to download your resume
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    ✅ No auto-renewal • Cancel anytime • Full features included
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <MdDownload className="w-5 h-5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800">
+                    🔓 Unlock resume downloads
+                  </p>
+                  <p className="text-xs text-blue-600">
+                    Subscribe to download your resume in PDF, DOCX, or TXT format
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Order Summary */}
-          <div className="bg-gray-50 rounded-xl p-4">
+          <div className={`rounded-xl p-4 ${isTrial ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}`}>
             <h4 className="text-sm font-semibold text-gray-900 mb-3">Order Summary</h4>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-gray-600">{plan.name} Plan</span>
-              <span className="text-sm font-medium text-gray-900">${plan.price}</span>
+              <span className={`text-sm font-medium ${isTrial ? 'text-green-600' : 'text-gray-900'}`}>
+                ${plan.price}
+              </span>
             </div>
             <div className="flex justify-between items-center text-sm text-gray-500">
               <span>Duration</span>
-              <span className="capitalize">{plan.duration}</span>
+              <span className="capitalize">{plan.duration === 'trial' ? '14 Days' : plan.duration}</span>
             </div>
-            <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between items-center">
+            {isTrial && (
+              <div className="flex justify-between items-center text-sm text-green-600 mt-1">
+                <span>💡 Savings</span>
+                <span className="font-medium">Full 14-day access</span>
+              </div>
+            )}
+            <div className={`border-t pt-2 mt-2 flex justify-between items-center ${
+              isTrial ? 'border-green-200' : 'border-gray-200'
+            }`}>
               <span className="text-sm font-semibold text-gray-900">Total</span>
-              <span className="text-lg font-bold text-gray-900">
+              <span className={`text-lg font-bold ${isTrial ? 'text-green-600' : 'text-gray-900'}`}>
                 ${plan.price} <span className="text-xs text-gray-500">USD</span>
               </span>
             </div>
@@ -445,7 +475,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           {paymentMethod === 'paypal' && (
             <div className="min-h-[200px] flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl">
               <p className="text-sm text-gray-500 mb-4">
-                You will be redirected to PayPal to complete your payment.
+                {isTrial 
+                  ? 'Pay $1 with PayPal to start your 14-day trial'
+                  : 'You will be redirected to PayPal to complete your payment.'
+                }
               </p>
               <div 
                 id={containerId}
@@ -495,7 +528,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               <button
                 onClick={handleStripePayment}
                 disabled={processing}
-                className="w-full py-3 px-6 bg-[#635bff] text-white text-sm font-semibold rounded-xl hover:bg-[#4f46e5] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className={`w-full py-3 px-6 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+                  isTrial 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-[#635bff] hover:bg-[#4f46e5]'
+                }`}
               >
                 {processing ? (
                   <>
@@ -505,7 +542,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 ) : (
                   <>
                     <MdLock className="w-4 h-4" />
-                    Pay ${plan.price} with Stripe
+                    {isTrial ? 'Pay $1 with Stripe' : `Pay $${plan.price} with Stripe`}
                   </>
                 )}
               </button>
@@ -517,6 +554,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             <MdLock className="w-3 h-3" />
             Secured by {paymentMethod === 'paypal' ? 'PayPal' : 'Stripe'}
           </div>
+
+          {/* ✅ Trial-specific footer note */}
+          {isTrial && (
+            <div className="text-center text-xs text-gray-400 border-t border-gray-100 pt-3">
+              💡 Your payment of $1 gives you full access for 14 days. No auto-renewal.
+            </div>
+          )}
         </div>
       )}
     </Modal>
