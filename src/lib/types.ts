@@ -20,6 +20,7 @@ export interface Subscription {
   currency: string;
   autoRenew: boolean;
   paymentId?: string;
+  isPaid?: boolean;
 }
 
 export interface User {
