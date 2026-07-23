@@ -139,201 +139,192 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   // ============================================
   // HANDLE PAYPAL SUCCESS
   // ============================================
+const handlePayPalSuccess = async (data: any) => {
+  if (!user) {
+    toast.error('User not found. Please login again.');
+    return;
+  }
 
-  const handlePayPalSuccess = async (data: any) => {
-    if (!user) {
-      toast.error('User not found. Please login again.');
-      return;
+  setProcessing(true);
+  setPaymentError(null);
+
+  try {
+    // Create payment record
+    const paymentDetails = {
+      planId: planId,
+      amount: plan?.price || 0,
+      currency: 'USD',
+      method: 'paypal' as const,
+      status: 'completed' as const,
+      transactionId: data.orderID || `PAYPAL-TXN-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+    };
+
+    addPayment(paymentDetails);
+
+    const now = new Date();
+    let endDate = new Date();
+    let amount = plan?.price || 0;
+    
+    switch (plan?.duration) {
+      case 'trial':
+        endDate.setDate(now.getDate() + 14);
+        amount = 1;
+        break;
+      case 'monthly':
+        endDate.setMonth(now.getMonth() + 1);
+        amount = 14.99;
+        break;
+      case 'yearly':
+        endDate.setFullYear(now.getFullYear() + 1);
+        amount = 89.99;
+        break;
+      default:
+        endDate.setDate(now.getDate() + 14);
+        amount = 1;
     }
 
-    setProcessing(true);
-    setPaymentError(null);
+    const subscription = {
+      plan: plan?.duration || 'trial',
+      startDate: now.toISOString(),
+      endDate: endDate.toISOString(),
+      paymentMethod: 'paypal' as const,
+      status: 'active' as const,
+      amount: amount,
+      currency: 'USD',
+      autoRenew: plan?.duration !== 'trial',
+      paymentId: paymentDetails.transactionId,
+      isPaid: true, // ✅ MAKE SURE THIS IS SET TO true
+    };
 
+    // ✅ 3. Update local state
+    updateSubscription(subscription);
+
+    // ✅ 4. Save payment and subscription to Firebase
     try {
-      const paymentDetails = {
-        planId: planId,
-        amount: plan?.price || 0,
-        currency: 'USD',
-        method: 'paypal' as const,
-        status: 'completed' as const,
-        transactionId: data.orderID || `PAYPAL-TXN-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-      };
-
-      addPayment(paymentDetails);
-
-      const now = new Date();
-      let endDate = new Date();
-      let amount = plan?.price || 0;
-      
-      switch (plan?.duration) {
-        case 'trial':
-          endDate.setDate(now.getDate() + 14);
-          amount = 1;
-          break;
-        case 'monthly':
-          endDate.setMonth(now.getMonth() + 1);
-          amount = 14.99;
-          break;
-        case 'yearly':
-          endDate.setFullYear(now.getFullYear() + 1);
-          amount = 89.99;
-          break;
-        default:
-          endDate.setDate(now.getDate() + 14);
-          amount = 1;
-      }
-
-      const subscription = {
-        plan: plan?.duration || 'trial',
-        startDate: now.toISOString(),
-        endDate: endDate.toISOString(),
-        paymentMethod: 'paypal' as const,
-        status: 'active' as const,
-        amount: amount,
-        currency: 'USD',
-        autoRenew: plan?.duration !== 'trial',
-        paymentId: paymentDetails.transactionId,
-        isPaid: true,
-      };
-
-      updateSubscription(subscription);
-
-      try {
-        await databaseService.savePayment(user.id, paymentDetails);
-        await authService.updateSubscription(user.id, subscription);
-        console.log('✅ Payment and subscription saved to Firebase');
-      } catch (firebaseError) {
-        console.warn('Firebase save failed, but local state is updated:', firebaseError);
-      }
-
-      setSuccess(true);
-      
-      // ✅ Trial-specific success message
-      if (isTrial) {
-        toast.success(`✅ 14-Day Trial Activated! You can now download your resume.`);
-      } else {
-        toast.success(`✅ ${plan?.name || 'Plan'} activated! You can now download your resume.`);
-      }
-
-      if (onSuccess) {
-        onSuccess();
-      }
-
-      setTimeout(() => {
-        onClose();
-        setSuccess(false);
-        setProcessing(false);
-      }, 2000);
-
-    } catch (error: any) {
-      console.error('Payment processing error:', error);
-      setPaymentError(error.message || 'Payment processing failed. Please try again.');
-      toast.error(error.message || 'Payment failed. Please try again.');
-      setProcessing(false);
+      await databaseService.savePayment(user.id, paymentDetails);
+      await authService.updateSubscription(user.id, subscription);
+      console.log('✅ Payment and subscription saved to Firebase', subscription);
+    } catch (firebaseError) {
+      console.warn('Firebase save failed, but local state is updated:', firebaseError);
     }
-  };
+
+    setSuccess(true);
+    toast.success(`✅ ${plan?.name || 'Plan'} activated! You can now download your resume.`);
+
+    if (onSuccess) {
+      onSuccess();
+    }
+
+    setTimeout(() => {
+      onClose();
+      setSuccess(false);
+      setProcessing(false);
+    }, 2000);
+
+  } catch (error: any) {
+    console.error('Payment processing error:', error);
+    setPaymentError(error.message || 'Payment processing failed. Please try again.');
+    toast.error(error.message || 'Payment failed. Please try again.');
+    setProcessing(false);
+  }
+};
 
   // ============================================
   // HANDLE STRIPE PAYMENT
   // ============================================
+const handleStripePayment = async () => {
+  if (!user) {
+    toast.error('User not found. Please login again.');
+    return;
+  }
 
-  const handleStripePayment = async () => {
-    if (!user) {
-      toast.error('User not found. Please login again.');
-      return;
+  setProcessing(true);
+  setPaymentError(null);
+
+  try {
+    // Simulate Stripe payment processing
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    const paymentDetails = {
+      planId: planId,
+      amount: plan?.price || 0,
+      currency: 'USD',
+      method: 'stripe' as const,
+      status: 'completed' as const,
+      transactionId: `STRIPE-TXN-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+    };
+
+    addPayment(paymentDetails);
+
+    const now = new Date();
+    let endDate = new Date();
+    let amount = plan?.price || 0;
+    
+    switch (plan?.duration) {
+      case 'trial':
+        endDate.setDate(now.getDate() + 14);
+        amount = 1;
+        break;
+      case 'monthly':
+        endDate.setMonth(now.getMonth() + 1);
+        amount = 14.99;
+        break;
+      case 'yearly':
+        endDate.setFullYear(now.getFullYear() + 1);
+        amount = 89.99;
+        break;
+      default:
+        endDate.setDate(now.getDate() + 14);
+        amount = 1;
     }
 
-    setProcessing(true);
-    setPaymentError(null);
+    const subscription = {
+      plan: plan?.duration || 'trial',
+      startDate: now.toISOString(),
+      endDate: endDate.toISOString(),
+      paymentMethod: 'stripe' as const,
+      status: 'active' as const,
+      amount: amount,
+      currency: 'USD',
+      autoRenew: plan?.duration !== 'trial',
+      paymentId: paymentDetails.transactionId,
+      isPaid: true, // ✅ MAKE SURE THIS IS SET TO true
+    };
+
+    updateSubscription(subscription);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      const paymentDetails = {
-        planId: planId,
-        amount: plan?.price || 0,
-        currency: 'USD',
-        method: 'stripe' as const,
-        status: 'completed' as const,
-        transactionId: `STRIPE-TXN-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-      };
-
-      addPayment(paymentDetails);
-
-      const now = new Date();
-      let endDate = new Date();
-      let amount = plan?.price || 0;
-      
-      switch (plan?.duration) {
-        case 'trial':
-          endDate.setDate(now.getDate() + 14);
-          amount = 1;
-          break;
-        case 'monthly':
-          endDate.setMonth(now.getMonth() + 1);
-          amount = 14.99;
-          break;
-        case 'yearly':
-          endDate.setFullYear(now.getFullYear() + 1);
-          amount = 89.99;
-          break;
-        default:
-          endDate.setDate(now.getDate() + 14);
-          amount = 1;
-      }
-
-      const subscription = {
-        plan: plan?.duration || 'trial',
-        startDate: now.toISOString(),
-        endDate: endDate.toISOString(),
-        paymentMethod: 'stripe' as const,
-        status: 'active' as const,
-        amount: amount,
-        currency: 'USD',
-        autoRenew: plan?.duration !== 'trial',
-        paymentId: paymentDetails.transactionId,
-        isPaid: true,
-      };
-
-      updateSubscription(subscription);
-
-      try {
-        await databaseService.savePayment(user.id, paymentDetails);
-        await authService.updateSubscription(user.id, subscription);
-        console.log('✅ Payment and subscription saved to Firebase');
-      } catch (firebaseError) {
-        console.warn('Firebase save failed, but local state is updated:', firebaseError);
-      }
-
-      setSuccess(true);
-      
-      if (isTrial) {
-        toast.success(`✅ 14-Day Trial Activated! You can now download your resume.`);
-      } else {
-        toast.success(`✅ ${plan?.name || 'Plan'} activated! You can now download your resume.`);
-      }
-
-      if (onSuccess) {
-        onSuccess();
-      }
-
-      setTimeout(() => {
-        onClose();
-        setSuccess(false);
-        setProcessing(false);
-      }, 2000);
-
-    } catch (error: any) {
-      console.error('Stripe payment error:', error);
-      setPaymentError(error.message || 'Payment failed. Please try again.');
-      toast.error(error.message || 'Payment failed. Please try again.');
-      setProcessing(false);
+      await databaseService.savePayment(user.id, paymentDetails);
+      await authService.updateSubscription(user.id, subscription);
+      console.log('✅ Payment and subscription saved to Firebase', subscription);
+    } catch (firebaseError) {
+      console.warn('Firebase save failed, but local state is updated:', firebaseError);
     }
-  };
+
+    setSuccess(true);
+    toast.success(`✅ ${plan?.name || 'Plan'} activated! You can now download your resume.`);
+
+    if (onSuccess) {
+      onSuccess();
+    }
+
+    setTimeout(() => {
+      onClose();
+      setSuccess(false);
+      setProcessing(false);
+    }, 2000);
+
+  } catch (error: any) {
+    console.error('Stripe payment error:', error);
+    setPaymentError(error.message || 'Payment failed. Please try again.');
+    toast.error(error.message || 'Payment failed. Please try again.');
+    setProcessing(false);
+  }
+};
 
   if (!plan) return null;
 
