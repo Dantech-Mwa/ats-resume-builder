@@ -188,7 +188,7 @@ const Home: React.FC = () => {
                 <MdArrowForward className="w-5 h-5" />
               </button>
               <a
-                href="#features"
+                href="/#/#features"
                 className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white text-lg font-semibold rounded-xl hover:bg-white/20 transition-colors border border-white/20 flex items-center justify-center gap-2"
               >
                 <MdPlayCircle className="w-5 h-5" />
