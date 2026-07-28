@@ -379,6 +379,51 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
                 </div>
               )
             )}
+        {sections.referees && sections.referees.length > 0 && (
+  <div style={{ marginBottom: '15px' }}>
+    <h2 style={{
+      fontFamily: style.fontFamily,
+      fontSize: style.headingSize,
+      color: style.primaryColor,
+      borderBottom: `1px solid #e5e7eb`,
+      paddingBottom: '4px',
+      marginBottom: '8px',
+    }}>
+      REFEREES
+    </h2>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+      {sections.referees.map((ref: any) => (
+        <div key={ref.id} style={{
+          padding: '10px',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          fontSize: style.bodySize,
+        }}>
+          <p style={{ fontWeight: 'bold', color: '#111827', marginBottom: '2px' }}>
+            {ref.fullName}
+            {ref.isVerified && ' ✓'}
+          </p>
+          <p style={{ color: '#374151', fontSize: style.small }}>
+            {[ref.title, ref.organization].filter(Boolean).join(', ')}
+          </p>
+          {ref.relationship && (
+            <p style={{ color: '#6B7280', fontSize: style.small, fontStyle: 'italic' }}>
+              {ref.relationship}
+            </p>
+          )}
+          <p style={{ color: '#4B5563', fontSize: style.small, marginTop: '4px' }}>
+            {ref.email}
+          </p>
+          {ref.phone && (
+            <p style={{ color: '#4B5563', fontSize: style.small }}>
+              {ref.phone}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  </div>
+)}
           </motion.div>
         )}
       </div>
