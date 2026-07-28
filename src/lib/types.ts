@@ -352,7 +352,7 @@ export interface ResumeSections {
   conferences?: Conference[];
   patents?: Patent[];
   references?: Reference[];
-  referees?: Referee[]; 
+  referees: Referee[]; 
 }
 
 // ============================================
