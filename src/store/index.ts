@@ -173,6 +173,7 @@ const initialResumeData = (title?: string): ResumeData => ({
     publications: [],
     awards: [],
     customSections: [],
+    referees: [],
   },
   atsScore: null,
   aiRecommendations: [],
