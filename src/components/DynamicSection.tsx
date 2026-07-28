@@ -38,11 +38,21 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
 
   if (!currentResume) return null;
 
-  // Handle referees separately - they have their own component
-  if (sectionType === 'referees') {
-    return <RefereesSection />;
-  }
-
+  // Handle referees separately - they have their own component with internal buttons
+if (sectionType === 'referees') {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xl">{icon}</span>
+        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        {required && (
+          <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Required</span>
+        )}
+      </div>
+      <RefereesSection />
+    </div>
+  );
+}
   const sectionData = currentResume.sections[sectionType as keyof typeof currentResume.sections];
 
   const toggleExpand = (id: string) => {
