@@ -65,7 +65,9 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
     default:
       newItem = { id: uuidv4(), name: '' };
   }
-
+if (sectionType === 'referees') {
+  return <RefereesSection />;
+}
   addItem(sectionType as any, newItem);
   setEditingItem(newItem.id);
   
