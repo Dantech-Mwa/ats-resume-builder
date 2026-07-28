@@ -10,6 +10,10 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Loading from './components/Loading';
 import { useAuth, useUI } from './store';
 import { authService } from './lib/firebase';
+import ResumeGuide from './pages/ResumeGuide';
+import ATSTips from './pages/ATSTips';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 
 // Lazy load pages for better performance
 const Home = lazy(() => import('./pages/Home'));
@@ -23,6 +27,7 @@ const Contact = lazy(() => import('./pages/Contact'));
 const CareerBlog = lazy(() => import('./pages/CareerBlog'));
 const FAQ = lazy(() => import('./pages/FAQ'));
 const SampleResumes = lazy(() => import('./pages/SampleResumes'));
+
 
 // Loading fallback
 const PageLoader = () => (
@@ -89,6 +94,10 @@ const App: React.FC = () => {
 <Route path="/career-blog" element={<CareerBlog />} />
 <Route path="/faq" element={<FAQ />} />
 <Route path="/sample-resumes" element={<SampleResumes />} />
+            <Route path="/resume-guide" element={<ResumeGuide />} />
+<Route path="/ats-tips" element={<ATSTips />} />
+<Route path="/privacy-policy" element={<PrivacyPolicy />} />
+<Route path="/terms-of-service" element={<TermsOfService />} />
             
             {/* Protected Routes */}
             <Route
