@@ -610,7 +610,61 @@ class ResumeGenerator {
 
     return paragraphs;
   }
+ private createReferees(sections: ResumeSections): Paragraph[] {
+  const paragraphs: Paragraph[] = [];
+  
+  if (sections.referees?.length > 0) {
+    paragraphs.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_2,
+        text: 'REFEREES',
+        spacing: { before: 300, after: 100 },
+        run: { size: 24, bold: true, color: '1F2937' },
+        border: { bottom: { color: 'E5E7EB', space: 1, style: BorderStyle.SINGLE, size: 6 } },
+      })
+    );
 
+    sections.referees.forEach((ref) => {
+      paragraphs.push(
+        new Paragraph({
+          spacing: { before: 100, after: 30 },
+          children: [
+            new TextRun({ text: ref.fullName, bold: true, size: 22, color: '111827' }),
+            ref.isVerified ? new TextRun({ text: ' ✓', size: 20, color: '059669' }) : new TextRun({}),
+          ],
+        })
+      );
+      
+      paragraphs.push(
+        new Paragraph({
+          text: [ref.title, ref.organization].filter(Boolean).join(', '),
+          spacing: { after: 20 },
+          run: { size: 20, color: '374151' },
+        })
+      );
+      
+      if (ref.relationship) {
+        paragraphs.push(
+          new Paragraph({
+            text: `Relationship: ${ref.relationship}`,
+            spacing: { after: 20 },
+            run: { size: 20, italics: true, color: '6B7280' },
+          })
+        );
+      }
+      
+      paragraphs.push(
+        new Paragraph({
+          text: `${ref.email}${ref.phone ? ' | ' + ref.phone : ''}`,
+          spacing: { after: 50 },
+          run: { size: 20, color: '4B5563' },
+        })
+      );
+    });
+  }
+  
+  return paragraphs;
+}
   // ============================================
   // CUSTOM SECTIONS
   // ============================================
@@ -697,7 +751,6 @@ class ResumeGenerator {
 
     return paragraphs;
   }
-
   // ============================================
   // PDF GENERATION
   // ============================================
