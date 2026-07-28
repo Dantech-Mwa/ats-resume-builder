@@ -79,12 +79,13 @@ const Footer: React.FC = () => {
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Resources</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/career-blog?tab=blog" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="resume-guide" className="text-sm text-gray-400 hover:text-white transition-colors">
                   Resume Writing Guide
                 </Link>
               </li>
               <li>
-                <Link to="/career-blog?tab=blog" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/<li>
+                <Link to="ats-tips" className="text-sm text-gray-400 hover:text-white transition-colors">
                   ATS Optimization Tips
                 </Link>
               </li>
@@ -121,12 +122,12 @@ const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/privacy" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/privacy-policy" className="text-sm text-gray-400 hover:text-white transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link to="/terms" className="text-sm text-gray-400 hover:text-white transition-colors">
+                <Link to="/terms-of-service" className="text-sm text-gray-400 hover:text-white transition-colors">
                   Terms of Service
                 </Link>
               </li>
@@ -147,8 +148,8 @@ const Footer: React.FC = () => {
             </p>
             <div className="flex items-center gap-2 text-sm text-gray-400">
               <MdEmail className="w-4 h-4" />
-              <a href="mailto:support@atsresumebuilder.com" className="hover:text-white transition-colors">
-                support@atsresumebuilder.com
+              <a href="mailto:wambuamwanza6@gmail.com" className="hover:text-white transition-colors">
+                wambuamwanza6@gmail.com
               </a>
             </div>
           </div>
