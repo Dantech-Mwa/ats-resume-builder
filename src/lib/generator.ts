@@ -614,7 +614,7 @@ class ResumeGenerator {
  private createReferees(sections: ResumeSections): Paragraph[] {
   const paragraphs: Paragraph[] = [];
   
-  if (sections.referees?.length > 0) {
+ if (sections.referees && sections.referees.length > 0) {
     paragraphs.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_2,
