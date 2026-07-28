@@ -163,6 +163,13 @@ export const RESUME_SECTIONS = [
     required: false,
     description: 'Recognition and achievements',
   },
+  {
+    id: 'referees',
+    title: 'Referees',
+    icon: '👥',
+    required: false,
+    description: 'Professional references who can vouch for your work',
+  },
 ];
 
 // -------------------------------------------
