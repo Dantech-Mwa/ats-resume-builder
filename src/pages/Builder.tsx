@@ -284,6 +284,7 @@ const getSubscriptionStatus = useCallback(() => {
           publications: currentResume?.sections.publications || [],
           awards: currentResume?.sections.awards || [],
           customSections: currentResume?.sections.customSections || [],
+          referees: currentResume?.sections.referees || [], 
         },
         metadata: {
           ...currentResume!.metadata,
