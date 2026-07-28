@@ -16,6 +16,7 @@ import {
 } from 'react-icons/md';
 import { v4 as uuidv4 } from 'uuid';
 import { useResume } from '../store';
+import RefereesSection from './sections/RefereesSection';
 import { getDefaultExperience, getDefaultEducation, getDefaultSkill } from '../lib/utils';
 
 interface DynamicSectionProps {
