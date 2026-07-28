@@ -38,6 +38,11 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
 
   if (!currentResume) return null;
 
+  // Handle referees separately - they have their own component
+  if (sectionType === 'referees') {
+    return <RefereesSection />;
+  }
+
   const sectionData = currentResume.sections[sectionType as keyof typeof currentResume.sections];
 
   const toggleExpand = (id: string) => {
@@ -50,34 +55,31 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
     setExpandedItems(newExpanded);
   };
 
- const handleAdd = () => {
-  let newItem: any = { id: uuidv4() };
+  const handleAdd = () => {
+    let newItem: any = { id: uuidv4() };
 
-  switch (sectionType) {
-    case 'experience':
-      newItem = getDefaultExperience();
-      break;
-    case 'education':
-      newItem = getDefaultEducation();
-      break;
-    case 'skills':
-      newItem = getDefaultSkill();
-      break;
-    default:
-      newItem = { id: uuidv4(), name: '' };
-  }
-if (sectionType === 'referees') {
-  return <RefereesSection />;
-}
-  addItem(sectionType as any, newItem);
-  setEditingItem(newItem.id);
-  
-  // FIX: Convert Set to Array first
-  const newSet = new Set<string>();
-  expandedItems.forEach(item => newSet.add(item));
-  newSet.add(newItem.id);
-  setExpandedItems(newSet);
-};
+    switch (sectionType) {
+      case 'experience':
+        newItem = getDefaultExperience();
+        break;
+      case 'education':
+        newItem = getDefaultEducation();
+        break;
+      case 'skills':
+        newItem = getDefaultSkill();
+        break;
+      default:
+        newItem = { id: uuidv4(), name: '' };
+    }
+
+    addItem(sectionType as any, newItem);
+    setEditingItem(newItem.id);
+
+    const newSet = new Set<string>();
+    expandedItems.forEach(item => newSet.add(item));
+    newSet.add(newItem.id);
+    setExpandedItems(newSet);
+  };
 
   const handleRemove = (id: string) => {
     removeItem(sectionType as any, id);
@@ -89,81 +91,80 @@ if (sectionType === 'referees') {
   };
 
   // For non-array sections (contact, summary)
-  // For non-array sections (contact, summary)
-if (!Array.isArray(sectionData)) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xl">{icon}</span>
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-        {required && (
-          <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Required</span>
+  if (!Array.isArray(sectionData)) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xl">{icon}</span>
+          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+          {required && (
+            <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Required</span>
+          )}
+        </div>
+
+        {sectionType === 'contact' && (
+          <div className="space-y-4">
+            <input
+              type="text"
+              placeholder="Full Name"
+              value={(sectionData as any).fullName || ''}
+              onChange={(e) => updateSection('contact', { fullName: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                type="email"
+                placeholder="Email"
+                value={(sectionData as any).email || ''}
+                onChange={(e) => updateSection('contact', { email: e.target.value })}
+                className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <input
+                type="tel"
+                placeholder="Phone"
+                value={(sectionData as any).phone || ''}
+                onChange={(e) => updateSection('contact', { phone: e.target.value })}
+                className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <input
+              type="text"
+              placeholder="Location"
+              value={(sectionData as any).location || ''}
+              onChange={(e) => updateSection('contact', { location: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                type="url"
+                placeholder="LinkedIn URL"
+                value={(sectionData as any).linkedIn || ''}
+                onChange={(e) => updateSection('contact', { linkedIn: e.target.value })}
+                className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <input
+                type="url"
+                placeholder="GitHub URL"
+                value={(sectionData as any).github || ''}
+                onChange={(e) => updateSection('contact', { github: e.target.value })}
+                className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+        )}
+
+        {sectionType === 'summary' && (
+          <textarea
+            placeholder="Write a compelling professional summary..."
+            value={(sectionData as any).content || ''}
+            onChange={(e) => updateSection('summary', { content: e.target.value })}
+            rows={5}
+            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+          />
         )}
       </div>
-      
-      {sectionType === 'contact' && (
-        <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Full Name"
-            value={(sectionData as any).fullName || ''}
-            onChange={(e) => updateSection('contact', { fullName: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <input
-              type="email"
-              placeholder="Email"
-              value={(sectionData as any).email || ''}
-              onChange={(e) => updateSection('contact', { email: e.target.value })}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <input
-              type="tel"
-              placeholder="Phone"
-              value={(sectionData as any).phone || ''}
-              onChange={(e) => updateSection('contact', { phone: e.target.value })}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <input
-            type="text"
-            placeholder="Location"
-            value={(sectionData as any).location || ''}
-            onChange={(e) => updateSection('contact', { location: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <input
-              type="url"
-              placeholder="LinkedIn URL"
-              value={(sectionData as any).linkedIn || ''}
-              onChange={(e) => updateSection('contact', { linkedIn: e.target.value })}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <input
-              type="url"
-              placeholder="GitHub URL"
-              value={(sectionData as any).github || ''}
-              onChange={(e) => updateSection('contact', { github: e.target.value })}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-      )}
-
-      {sectionType === 'summary' && (
-        <textarea
-          placeholder="Write a compelling professional summary..."
-          value={(sectionData as any).content || ''}
-          onChange={(e) => updateSection('summary', { content: e.target.value })}
-          rows={5}
-          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-        />
-      )}
-    </div>
-  );
-}
+    );
+  }
 
   // For array sections (experience, education, etc.)
   return (
@@ -292,9 +293,9 @@ if (!Array.isArray(sectionData)) {
                               <input
                                 type="checkbox"
                                 checked={item.current || false}
-                                onChange={(e) => updateItem('experience' as any, item.id, { 
+                                onChange={(e) => updateItem('experience' as any, item.id, {
                                   current: e.target.checked,
-                                  endDate: e.target.checked ? '' : item.endDate 
+                                  endDate: e.target.checked ? '' : item.endDate
                                 })}
                                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                               />
@@ -450,8 +451,8 @@ if (!Array.isArray(sectionData)) {
                       </div>
                     )}
 
-                    {/* Generic Fields for other sections */}
-                    {!['experience', 'education', 'skills'].includes(sectionType) && (
+                    {/* Generic Fields for other sections (NOT referees) */}
+                    {!['experience', 'education', 'skills', 'referees'].includes(sectionType) && (
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
                         <input
