@@ -317,6 +317,19 @@ export interface Reference {
   relationship: 'Manager' | 'Peer' | 'Subordinate' | 'Client' | 'Academic';
 }
 
+export interface Referee {
+  id: string;
+  fullName: string;
+  title: string;
+  organization: string;
+  email: string;
+  phone: string;
+  relationship: string; // e.g., "Former Manager", "Colleague", "Client"
+  location?: string;
+  linkedIn?: string;
+  notes?: string;
+  isVerified: boolean;
+}
 // ============================================
 // UPDATED: ResumeSections with new optional fields
 // ============================================
@@ -339,6 +352,7 @@ export interface ResumeSections {
   conferences?: Conference[];
   patents?: Patent[];
   references?: Reference[];
+  referees?: Referee[]; 
 }
 
 // ============================================
