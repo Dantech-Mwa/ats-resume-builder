@@ -232,7 +232,15 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({
           resumeText += '\n';
         });
       }
-      
+  {sections.referees && (
+  <DynamicSection
+    key="referees"
+    sectionType="referees"
+    title="Referees"
+    icon="👥"
+    required={false}
+  />
+)}
       // Call real AI
       const score = await aiService.analyzeATS(resumeText);
       setATSScore(score);
