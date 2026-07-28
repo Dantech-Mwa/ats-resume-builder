@@ -84,7 +84,6 @@ const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/<li>
                 <Link to="ats-tips" className="text-sm text-gray-400 hover:text-white transition-colors">
                   ATS Optimization Tips
                 </Link>
