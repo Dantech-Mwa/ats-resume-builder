@@ -71,6 +71,7 @@ class ResumeGenerator {
               ...this.createExperience(sections),
               ...this.createEducation(sections),
               ...this.createSkills(sections),
+              ...this.createReferees(sections),
               ...this.createCertifications(sections),
               ...this.createProjects(sections),
               ...this.createCustomSections(sections),
