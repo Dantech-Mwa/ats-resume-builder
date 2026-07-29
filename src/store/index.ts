@@ -331,15 +331,19 @@ const useStore = create<AppStore>()(
         }),
 
       createNewResume: (title) => {
-        const newResume = initialResumeData(title);
-        set({
-          currentResume: newResume,
-          selectedTemplate: 'modern',
-          isDirty: false,
-          undoStack: [],
-          redoStack: [],
-        });
-      },
+  const state = get();
+  const newResume = initialResumeData(title);
+  
+  // Use the currently selected template
+  newResume.metadata.templateId = state.selectedTemplate || 'modern';
+  
+  set({
+    currentResume: newResume,
+    isDirty: false,
+    undoStack: [],
+    redoStack: [],
+  });
+},
 
       updateSection: (section, data) =>
         set((state) => {
