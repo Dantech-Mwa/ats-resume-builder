@@ -1,5 +1,5 @@
 // ============================================
-// RESUME PREVIEW COMPONENT - Template-Aware Live Preview
+// RESUME PREVIEW COMPONENT - Scrollable Preview
 // ============================================
 
 import React, { useRef, useEffect, useState } from 'react';
@@ -25,7 +25,6 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
   const previewRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ✅ Use the ACTUAL template from the resume metadata, fallback to selected
   const activeTemplate = currentResume?.metadata.templateId || selectedTemplate || 'modern';
 
   useEffect(() => {
@@ -80,11 +79,9 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
     );
   }
 
-  // ✅ Use the ACTIVE template (from resume metadata, not hardcoded)
   const style = getTemplateStyle(activeTemplate);
   const sections = currentResume.sections;
 
-  // ✅ Template-specific layout adjustments
   const isCentered = activeTemplate === 'executive' || activeTemplate === 'minimal';
   const isSplit = activeTemplate === 'creative';
   const headerBg = isSplit ? style.primaryColor : 'transparent';
@@ -92,9 +89,9 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
   const contactColor = isSplit ? '#E0E7FF' : '#666666';
 
   return (
-    <div ref={containerRef} className={`flex flex-col bg-gray-100 ${className}`}>
+    <div ref={containerRef} className={`flex flex-col h-full bg-gray-100 ${className}`}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-2 bg-white border-b border-gray-200">
+      <div className="flex items-center justify-between p-2 bg-white border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center gap-1">
           <button onClick={handleZoomOut} disabled={zoom <= 50} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors disabled:opacity-30" aria-label="Zoom out">
             <MdZoomOut className="w-4 h-4" />
@@ -120,10 +117,16 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
         </div>
       </div>
 
-      {/* Preview Area */}
-      <div className="flex-1 overflow-auto p-4 flex justify-center">
+      {/* 🔥 SCROLLABLE PREVIEW AREA */}
+      <div 
+        className="flex-1 overflow-y-auto overflow-x-hidden p-4 flex justify-center"
+        style={{ 
+          height: 'calc(100vh - 140px)',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
         {isLoading ? (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center h-full">
             <Loading type="spinner" size="md" text="Updating preview..." />
           </div>
         ) : (
@@ -133,12 +136,14 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3 }}
-            style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
+            style={{ 
+              transform: `scale(${zoom / 100})`, 
+              transformOrigin: 'top center',
+              marginBottom: '60px',
+            }}
             className="bg-white shadow-strong w-[210mm] min-h-[297mm] p-8"
           >
-            {/* ============================================ */}
-            {/* HEADER - Template-Aware */}
-            {/* ============================================ */}
+            {/* HEADER */}
             <div style={{
               backgroundColor: headerBg,
               padding: isSplit ? '16px' : '0',
@@ -155,26 +160,11 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
               }}>
                 {sections.contact.fullName || 'Your Name'}
               </h1>
-              <p style={{
-                fontFamily: style.fontFamily,
-                fontSize: '11px',
-                color: contactColor,
-                margin: 0,
-                lineHeight: 1.5,
-              }}>
-                {[
-                  sections.contact.email,
-                  sections.contact.phone,
-                  sections.contact.location,
-                ].filter(Boolean).join(' | ')}
+              <p style={{ fontFamily: style.fontFamily, fontSize: '11px', color: contactColor, margin: 0, lineHeight: 1.5 }}>
+                {[sections.contact.email, sections.contact.phone, sections.contact.location].filter(Boolean).join(' | ')}
               </p>
               {(sections.contact.linkedIn || sections.contact.github) && (
-                <p style={{
-                  fontFamily: style.fontFamily,
-                  fontSize: '11px',
-                  color: contactColor,
-                  margin: '2px 0 0 0',
-                }}>
+                <p style={{ fontFamily: style.fontFamily, fontSize: '11px', color: contactColor, margin: '2px 0 0 0' }}>
                   {[sections.contact.linkedIn, sections.contact.github].filter(Boolean).join(' | ')}
                 </p>
               )}
@@ -182,101 +172,47 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
 
             <hr style={{ border: `1px solid ${style.secondaryColor}`, marginBottom: '15px' }} />
 
-            {/* ============================================ */}
             {/* SUMMARY */}
-            {/* ============================================ */}
             {sections.summary?.content && (
               <div style={{ marginBottom: '15px' }}>
-                <h2 style={{
-                  fontFamily: style.fontFamily,
-                  fontSize: style.headingSize,
-                  color: style.primaryColor,
-                  borderBottom: `1px solid #e5e7eb`,
-                  paddingBottom: '4px',
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}>
+                <h2 style={{ fontFamily: style.fontFamily, fontSize: style.headingSize, color: style.primaryColor, borderBottom: '1px solid #e5e7eb', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Professional Summary
                 </h2>
-                <p style={{
-                  fontFamily: style.fontFamily,
-                  fontSize: style.bodySize,
-                  color: '#374151',
-                  lineHeight: '1.6',
-                  margin: 0,
-                }}>
+                <p style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#374151', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>
                   {sections.summary.content}
                 </p>
               </div>
             )}
 
-            {/* ============================================ */}
             {/* EXPERIENCE */}
-            {/* ============================================ */}
             {sections.experience && sections.experience.length > 0 && (
               <div style={{ marginBottom: '15px' }}>
-                <h2 style={{
-                  fontFamily: style.fontFamily,
-                  fontSize: style.headingSize,
-                  color: style.primaryColor,
-                  borderBottom: `1px solid #e5e7eb`,
-                  paddingBottom: '4px',
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}>
+                <h2 style={{ fontFamily: style.fontFamily, fontSize: style.headingSize, color: style.primaryColor, borderBottom: '1px solid #e5e7eb', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Professional Experience
                 </h2>
                 {sections.experience.map((exp) => (
                   <div key={exp.id} style={{ marginBottom: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <strong style={{
-                        fontFamily: style.fontFamily,
-                        fontSize: style.bodySize,
-                        color: '#111827',
-                      }}>
+                      <strong style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#111827' }}>
                         {exp.position || 'Position'}
                       </strong>
-                      <span style={{
-                        fontFamily: style.fontFamily,
-                        fontSize: style.small,
-                        color: '#6B7280',
-                        fontStyle: 'italic',
-                      }}>
+                      <span style={{ fontFamily: style.fontFamily, fontSize: style.small, color: '#6B7280', fontStyle: 'italic' }}>
                         {exp.startDate} - {exp.current ? 'Present' : exp.endDate}
                       </span>
                     </div>
-                    <div style={{
-                      fontFamily: style.fontFamily,
-                      fontSize: style.bodySize,
-                      color: '#374151',
-                      fontStyle: 'italic',
-                      marginBottom: '4px',
-                    }}>
+                    <div style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#374151', fontStyle: 'italic', marginBottom: '4px' }}>
                       {exp.company || 'Company'}
                       {exp.location ? ` | ${exp.location}` : ''}
                     </div>
                     {exp.description && (
-                      <p style={{
-                        fontFamily: style.fontFamily,
-                        fontSize: style.bodySize,
-                        color: '#4B5563',
-                        margin: '4px 0',
-                        lineHeight: '1.4',
-                      }}>
+                      <p style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#4B5563', margin: '4px 0', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>
                         {exp.description}
                       </p>
                     )}
                     {exp.achievements && exp.achievements.filter(a => a.trim()).length > 0 && (
                       <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
                         {exp.achievements.filter(a => a.trim()).map((achievement, i) => (
-                          <li key={i} style={{
-                            fontFamily: style.fontFamily,
-                            fontSize: style.bodySize,
-                            color: '#4B5563',
-                            marginBottom: '2px',
-                          }}>
+                          <li key={i} style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#4B5563', marginBottom: '2px' }}>
                             {achievement}
                           </li>
                         ))}
@@ -287,48 +223,24 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
               </div>
             )}
 
-            {/* ============================================ */}
             {/* EDUCATION */}
-            {/* ============================================ */}
             {sections.education && sections.education.length > 0 && (
               <div style={{ marginBottom: '15px' }}>
-                <h2 style={{
-                  fontFamily: style.fontFamily,
-                  fontSize: style.headingSize,
-                  color: style.primaryColor,
-                  borderBottom: `1px solid #e5e7eb`,
-                  paddingBottom: '4px',
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}>
+                <h2 style={{ fontFamily: style.fontFamily, fontSize: style.headingSize, color: style.primaryColor, borderBottom: '1px solid #e5e7eb', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Education
                 </h2>
                 {sections.education.map((edu) => (
                   <div key={edu.id} style={{ marginBottom: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <strong style={{
-                        fontFamily: style.fontFamily,
-                        fontSize: style.bodySize,
-                        color: '#111827',
-                      }}>
+                      <strong style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#111827' }}>
                         {edu.degree || 'Degree'}
                         {edu.field ? ` in ${edu.field}` : ''}
                       </strong>
-                      <span style={{
-                        fontFamily: style.fontFamily,
-                        fontSize: style.small,
-                        color: '#6B7280',
-                        fontStyle: 'italic',
-                      }}>
+                      <span style={{ fontFamily: style.fontFamily, fontSize: style.small, color: '#6B7280', fontStyle: 'italic' }}>
                         {edu.startDate} - {edu.endDate}
                       </span>
                     </div>
-                    <div style={{
-                      fontFamily: style.fontFamily,
-                      fontSize: style.bodySize,
-                      color: '#374151',
-                    }}>
+                    <div style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#374151' }}>
                       {edu.institution || 'Institution'}
                       {edu.gpa ? ` | GPA: ${edu.gpa}` : ''}
                     </div>
@@ -337,22 +249,11 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
               </div>
             )}
 
-            {/* ============================================ */}
             {/* SKILLS */}
-            {/* ============================================ */}
             {sections.skills && (
               (sections.skills.technical?.length || sections.skills.soft?.length || sections.skills.tools?.length) > 0 && (
                 <div style={{ marginBottom: '15px' }}>
-                  <h2 style={{
-                    fontFamily: style.fontFamily,
-                    fontSize: style.headingSize,
-                    color: style.primaryColor,
-                    borderBottom: `1px solid #e5e7eb`,
-                    paddingBottom: '4px',
-                    marginBottom: '8px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                  }}>
+                  <h2 style={{ fontFamily: style.fontFamily, fontSize: style.headingSize, color: style.primaryColor, borderBottom: '1px solid #e5e7eb', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Skills
                   </h2>
                   {sections.skills.technical?.length > 0 && (
@@ -374,51 +275,68 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ className = '' }) => {
               )
             )}
 
-            {/* ============================================ */}
+            {/* CERTIFICATIONS */}
+            {sections.certifications && sections.certifications.length > 0 && (
+              <div style={{ marginBottom: '15px' }}>
+                <h2 style={{ fontFamily: style.fontFamily, fontSize: style.headingSize, color: style.primaryColor, borderBottom: '1px solid #e5e7eb', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Certifications
+                </h2>
+                {sections.certifications.map((cert: any) => (
+                  <div key={cert.id} style={{ marginBottom: '4px', fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#4B5563' }}>
+                    • {cert.name}{cert.issuer ? ` - ${cert.issuer}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* PROJECTS */}
+            {sections.projects && sections.projects.length > 0 && (
+              <div style={{ marginBottom: '15px' }}>
+                <h2 style={{ fontFamily: style.fontFamily, fontSize: style.headingSize, color: style.primaryColor, borderBottom: '1px solid #e5e7eb', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Projects
+                </h2>
+                {sections.projects.map((proj: any) => (
+                  <div key={proj.id} style={{ marginBottom: '8px' }}>
+                    <strong style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#111827' }}>{proj.name}</strong>
+                    {proj.description && (
+                      <p style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#4B5563', margin: '2px 0', whiteSpace: 'pre-wrap' }}>{proj.description}</p>
+                    )}
+                    {proj.technologies?.length > 0 && (
+                      <p style={{ fontFamily: style.fontFamily, fontSize: style.small, color: '#6B7280' }}>
+                        Technologies: {proj.technologies.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* LANGUAGES */}
+            {sections.languages && sections.languages.length > 0 && (
+              <div style={{ marginBottom: '15px' }}>
+                <h2 style={{ fontFamily: style.fontFamily, fontSize: style.headingSize, color: style.primaryColor, borderBottom: '1px solid #e5e7eb', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Languages
+                </h2>
+                <p style={{ fontFamily: style.fontFamily, fontSize: style.bodySize, color: '#4B5563' }}>
+                  {sections.languages.map((l: any) => `${l.name} (${l.proficiency})`).join(' • ')}
+                </p>
+              </div>
+            )}
+
             {/* REFEREES */}
-            {/* ============================================ */}
             {sections.referees && sections.referees.length > 0 && (
               <div style={{ marginBottom: '15px' }}>
-                <h2 style={{
-                  fontFamily: style.fontFamily,
-                  fontSize: style.headingSize,
-                  color: style.primaryColor,
-                  borderBottom: `1px solid #e5e7eb`,
-                  paddingBottom: '4px',
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}>
+                <h2 style={{ fontFamily: style.fontFamily, fontSize: style.headingSize, color: style.primaryColor, borderBottom: '1px solid #e5e7eb', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Referees
                 </h2>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   {sections.referees.map((ref: any) => (
-                    <div key={ref.id} style={{
-                      padding: '10px',
-                      border: `1px solid ${style.secondaryColor}20`,
-                      borderRadius: '8px',
-                      fontSize: style.bodySize,
-                    }}>
-                      <p style={{ fontWeight: 'bold', color: '#111827', marginBottom: '2px' }}>
-                        {ref.fullName}
-                        {ref.isVerified && ' ✓'}
-                      </p>
-                      <p style={{ color: '#374151', fontSize: style.small }}>
-                        {[ref.title, ref.organization].filter(Boolean).join(', ')}
-                      </p>
-                      {ref.relationship && (
-                        <p style={{ color: '#6B7280', fontSize: style.small, fontStyle: 'italic' }}>
-                          {ref.relationship}
-                        </p>
-                      )}
-                      <p style={{ color: '#4B5563', fontSize: style.small, marginTop: '4px' }}>
-                        {ref.email}
-                      </p>
-                      {ref.phone && (
-                        <p style={{ color: '#4B5563', fontSize: style.small }}>
-                          {ref.phone}
-                        </p>
-                      )}
+                    <div key={ref.id} style={{ padding: '10px', border: `1px solid ${style.secondaryColor}20`, borderRadius: '8px', fontSize: style.bodySize }}>
+                      <p style={{ fontWeight: 'bold', color: '#111827', marginBottom: '2px' }}>{ref.fullName}{ref.isVerified && ' ✓'}</p>
+                      <p style={{ color: '#374151', fontSize: style.small }}>{[ref.title, ref.organization].filter(Boolean).join(', ')}</p>
+                      {ref.relationship && <p style={{ color: '#6B7280', fontSize: style.small, fontStyle: 'italic' }}>{ref.relationship}</p>}
+                      <p style={{ color: '#4B5563', fontSize: style.small, marginTop: '4px' }}>{ref.email}</p>
+                      {ref.phone && <p style={{ color: '#4B5563', fontSize: style.small }}>{ref.phone}</p>}
                     </div>
                   ))}
                 </div>
