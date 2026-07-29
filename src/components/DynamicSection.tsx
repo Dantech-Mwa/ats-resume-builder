@@ -1,5 +1,5 @@
 // ============================================
-// DYNAMIC SECTION COMPONENT - No Input Focus Loss
+// DYNAMIC SECTION COMPONENT - Bullet-Ready Descriptions
 // ============================================
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -14,61 +14,143 @@ import RefereesSection from './sections/RefereesSection';
 import { getDefaultExperience, getDefaultEducation, getDefaultSkill } from '../lib/utils';
 
 // ============================================
-// LOCAL STATE INPUT - Prevents focus loss on re-render
+// LOCAL INPUT - No focus loss
 // ============================================
 const LocalInput: React.FC<{
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  type?: string;
-  className?: string;
-  disabled?: boolean;
+  value: string; onChange: (value: string) => void;
+  placeholder?: string; type?: string; className?: string; disabled?: boolean;
 }> = ({ value, onChange, placeholder, type = 'text', className, disabled }) => {
-  const [localValue, setLocalValue] = useState(value);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => { setLocalValue(value); }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value;
-    setLocalValue(v);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => onChange(v), 200);
+  const [local, setLocal] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { setLocal(value); }, [value]);
+  const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value; setLocal(v);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => onChange(v), 200);
   };
-
-  return <input type={type} value={localValue} onChange={handleChange} placeholder={placeholder} className={className} disabled={disabled} />;
+  return <input type={type} value={local} onChange={handle} placeholder={placeholder} className={className} disabled={disabled} />;
 };
 
-const LocalTextarea: React.FC<{
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  rows?: number;
-  className?: string;
-}> = ({ value, onChange, placeholder, rows = 3, className }) => {
-  const [localValue, setLocalValue] = useState(value);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+// ============================================
+// BULLET-READY TEXTAREA - Enter creates new bullet
+// ============================================
+const BulletTextarea: React.FC<{
+  value: string; onChange: (value: string) => void;
+  placeholder?: string; rows?: number; className?: string;
+}> = ({ value, onChange, placeholder, rows = 4, className }) => {
+  const [local, setLocal] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => { setLocalValue(value); }, [value]);
+  useEffect(() => { setLocal(value); }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const v = e.target.value;
-    setLocalValue(v);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => onChange(v), 200);
+    const v = e.target.value; setLocal(v);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => onChange(v), 200);
   };
 
-  return <textarea value={localValue} onChange={handleChange} placeholder={placeholder} rows={rows} className={className} />;
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const ta = e.currentTarget;
+      const start = ta.selectionStart;
+      const val = ta.value;
+      
+      // Find start of current line
+      const beforeCursor = val.substring(0, start);
+      const lastNewline = beforeCursor.lastIndexOf('\n');
+      const currentLine = val.substring(lastNewline + 1, start);
+      
+      // If current line is empty with a bullet, remove the bullet and break out
+      if (currentLine.trim() === '•' || currentLine.trim() === '') {
+        // Remove the empty bullet line
+        const newVal = val.substring(0, lastNewline + 1) + '\n' + val.substring(start);
+        setLocal(newVal);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => onChange(newVal), 200);
+        setTimeout(() => {
+          if (textRef.current) {
+            const newPos = lastNewline + 2;
+            textRef.current.selectionStart = textRef.current.selectionEnd = newPos;
+          }
+        }, 0);
+        return;
+      }
+      
+      // Insert new bullet point
+      const newVal = val.substring(0, start) + '\n• ' + val.substring(start);
+      setLocal(newVal);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => onChange(newVal), 200);
+      
+      setTimeout(() => {
+        if (textRef.current) {
+          textRef.current.selectionStart = textRef.current.selectionEnd = start + 3;
+        }
+      }, 0);
+    }
+    
+    // Backspace on empty bullet line removes it
+    if (e.key === 'Backspace') {
+      const ta = e.currentTarget;
+      const start = ta.selectionStart;
+      const val = ta.value;
+      const beforeCursor = val.substring(0, start);
+      const lastNewline = beforeCursor.lastIndexOf('\n');
+      const currentLine = val.substring(lastNewline + 1, start);
+      
+      if (currentLine.trim() === '•' && start === lastNewline + 3) {
+        e.preventDefault();
+        const newVal = val.substring(0, lastNewline) + val.substring(start);
+        setLocal(newVal);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => onChange(newVal), 200);
+        setTimeout(() => {
+          if (textRef.current) {
+            textRef.current.selectionStart = textRef.current.selectionEnd = lastNewline;
+          }
+        }, 0);
+      }
+    }
+  };
+
+  return (
+    <textarea
+      ref={textRef}
+      value={local}
+      onChange={handleChange}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder || 'Describe responsibilities and achievements...\nPress Enter for new bullet point'}
+      rows={rows}
+      className={className}
+    />
+  );
+};
+
+// ============================================
+// SIMPLE TEXTAREA - No bullet behavior
+// ============================================
+const LocalTextarea: React.FC<{
+  value: string; onChange: (value: string) => void;
+  placeholder?: string; rows?: number; className?: string;
+}> = ({ value, onChange, placeholder, rows = 3, className }) => {
+  const [local, setLocal] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { setLocal(value); }, [value]);
+  const handle = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const v = e.target.value; setLocal(v);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => onChange(v), 200);
+  };
+  return <textarea value={local} onChange={handle} placeholder={placeholder} rows={rows} className={className} />;
 };
 
 // ============================================
 // MAIN COMPONENT
 // ============================================
 interface DynamicSectionProps {
-  sectionType: string;
-  title: string;
-  icon?: string;
-  required?: boolean;
+  sectionType: string; title: string; icon?: string; required?: boolean;
 }
 
 const DynamicSection: React.FC<DynamicSectionProps> = ({
@@ -76,10 +158,8 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
 }) => {
   const { currentResume, updateSection, addItem, updateItem, removeItem } = useResume();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-
   if (!currentResume) return null;
 
-  // Referees handled separately
   if (sectionType === 'referees') {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -95,13 +175,7 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
 
   const sectionData = currentResume.sections[sectionType as keyof typeof currentResume.sections];
 
-  const toggleExpand = (id: string) => {
-    setExpandedItems(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
+  const toggleExpand = (id: string) => setExpandedItems(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const handleAdd = () => {
     let newItem: any = { id: uuidv4() };
@@ -109,18 +183,17 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
     else if (sectionType === 'education') newItem = getDefaultEducation();
     else if (sectionType === 'skills') newItem = getDefaultSkill();
     else newItem = { id: uuidv4(), name: '' };
-
     addItem(sectionType as any, newItem);
     setExpandedItems(prev => new Set([...prev, newItem.id]));
   };
 
   const handleRemove = (id: string) => {
     removeItem(sectionType as any, id);
-    setExpandedItems(prev => { const next = new Set(prev); next.delete(id); return next; });
+    setExpandedItems(prev => { const n = new Set(prev); n.delete(id); return n; });
   };
 
   // ============================================
-  // NON-ARRAY SECTIONS (contact, summary)
+  // NON-ARRAY (contact, summary)
   // ============================================
   if (!Array.isArray(sectionData)) {
     return (
@@ -130,31 +203,29 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
           <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
           {required && <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Required</span>}
         </div>
-
         {sectionType === 'contact' && (
           <div className="space-y-4">
-            <LocalInput type="text" placeholder="Full Name" value={(sectionData as any).fullName || ''} onChange={v => updateSection('contact', { fullName: v })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <LocalInput placeholder="Full Name" value={(sectionData as any).fullName || ''} onChange={v => updateSection('contact', { fullName: v })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             <div className="grid grid-cols-2 gap-4">
               <LocalInput type="email" placeholder="Email" value={(sectionData as any).email || ''} onChange={v => updateSection('contact', { email: v })} className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               <LocalInput type="tel" placeholder="Phone" value={(sectionData as any).phone || ''} onChange={v => updateSection('contact', { phone: v })} className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
-            <LocalInput type="text" placeholder="Location" value={(sectionData as any).location || ''} onChange={v => updateSection('contact', { location: v })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <LocalInput placeholder="Location" value={(sectionData as any).location || ''} onChange={v => updateSection('contact', { location: v })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             <div className="grid grid-cols-2 gap-4">
               <LocalInput type="url" placeholder="LinkedIn URL" value={(sectionData as any).linkedIn || ''} onChange={v => updateSection('contact', { linkedIn: v })} className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               <LocalInput type="url" placeholder="GitHub URL" value={(sectionData as any).github || ''} onChange={v => updateSection('contact', { github: v })} className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
           </div>
         )}
-
         {sectionType === 'summary' && (
-          <LocalTextarea placeholder="Write a compelling professional summary..." value={(sectionData as any).content || ''} onChange={v => updateSection('summary', { content: v })} rows={5} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
+          <BulletTextarea placeholder="Write a compelling professional summary..." value={(sectionData as any).content || ''} onChange={v => updateSection('summary', { content: v })} rows={4} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
         )}
       </div>
     );
   }
 
   // ============================================
-  // ARRAY SECTIONS (experience, education, skills, etc.)
+  // ARRAY SECTIONS
   // ============================================
   return (
     <div className="space-y-4">
@@ -169,11 +240,9 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
           <MdAdd className="w-4 h-4" /> Add {title}
         </button>
       </div>
-
       <AnimatePresence>
         {sectionData.map((item: any, index: number) => (
           <motion.div key={item.id} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {/* Header */}
             <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50" onClick={() => toggleExpand(item.id)}>
               <div className="flex items-center gap-3">
                 <MdDragHandle className="w-5 h-5 text-gray-400 cursor-grab" />
@@ -183,18 +252,16 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={(e) => { e.stopPropagation(); handleRemove(item.id); }} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><MdDelete className="w-4 h-4" /></button>
+                <button onClick={(e) => { e.stopPropagation(); handleRemove(item.id); }} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><MdDelete className="w-4 h-4" /></button>
                 {expandedItems.has(item.id) ? <MdExpandLess className="w-5 h-5 text-gray-400" /> : <MdExpandMore className="w-5 h-5 text-gray-400" />}
               </div>
             </div>
-
-            {/* Expanded Content */}
             <AnimatePresence>
               {expandedItems.has(item.id) && (
                 <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
                   <div className="p-4 border-t border-gray-100 space-y-4">
 
-                    {/* EXPERIENCE FIELDS */}
+                    {/* EXPERIENCE */}
                     {sectionType === 'experience' && (
                       <>
                         <div className="grid grid-cols-2 gap-4">
@@ -206,9 +273,21 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
                           <div><label className="block text-xs font-medium text-gray-700 mb-1">End Date</label><LocalInput value={item.endDate || ''} onChange={v => updateItem('experience' as any, item.id, { endDate: v })} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400" placeholder="Present" disabled={item.current} /></div>
                           <div className="flex items-end pb-2"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={item.current || false} onChange={e => updateItem('experience' as any, item.id, { current: e.target.checked, endDate: e.target.checked ? '' : item.endDate })} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /><span className="text-xs text-gray-700">Current</span></label></div>
                         </div>
-                        <div><label className="block text-xs font-medium text-gray-700 mb-1">Description</label><LocalTextarea value={item.description || ''} onChange={v => updateItem('experience' as any, item.id, { description: v })} rows={3} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" placeholder="Describe your role..." /></div>
+                        {/* 🔥 BULLET-READY DESCRIPTION */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Achievements</label>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Roles & Responsibilities
+                          </label>
+                          <BulletTextarea
+                            value={item.description || ''}
+                            onChange={v => updateItem('experience' as any, item.id, { description: v })}
+                            rows={5}
+                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                            placeholder="• Designed and executed comprehensive MERL frameworks&#10;• Developed and deployed interactive MMIS dashboards&#10;• Spearheaded data quality assurance initiatives&#10;&#10;Press Enter for a new bullet point"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Key Achievements</label>
                           {(item.achievements || ['']).map((achievement: string, i: number) => (
                             <div key={i} className="flex gap-2 mb-2">
                               <LocalInput value={achievement} onChange={v => { const a = [...(item.achievements || [])]; a[i] = v; updateItem('experience' as any, item.id, { achievements: a }); }} className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="• Add an achievement..." />
@@ -220,7 +299,7 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
                       </>
                     )}
 
-                    {/* EDUCATION FIELDS */}
+                    {/* EDUCATION */}
                     {sectionType === 'education' && (
                       <>
                         <div className="grid grid-cols-2 gap-4">
@@ -236,7 +315,7 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
                       </>
                     )}
 
-                    {/* SKILLS FIELDS */}
+                    {/* SKILLS */}
                     {sectionType === 'skills' && (
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs font-medium text-gray-700 mb-1">Skill Name</label><LocalInput value={item.name || ''} onChange={v => updateItem('skills' as any, item.id, { name: v })} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="e.g., React" /></div>
@@ -255,7 +334,6 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
           </motion.div>
         ))}
       </AnimatePresence>
-
       {sectionData.length === 0 && (
         <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
           <p className="text-sm text-gray-500">No {title.toLowerCase()} added yet. Click the button above to add one.</p>
