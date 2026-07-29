@@ -434,47 +434,32 @@ export const getTopSkills = (skills: Skill[], count: number = 5): Skill[] => {
 // ============================================
 // TEMPLATE UTILITIES
 // ============================================
-
 export const getTemplateStyle = (templateId: string): Record<string, string> => {
-  const styles: Record<string, Record<string, string>> = {
-    modern: {
+  // Import TemplateEngine dynamically to avoid circular dependency
+  const TemplateEngine = require('./templates').default;
+  const engine = TemplateEngine.getInstance();
+  const template = engine.getTemplate(templateId);
+
+  if (!template) {
+    // Fallback to modern
+    return {
       fontFamily: "'Inter', sans-serif",
       primaryColor: '#2563EB',
       secondaryColor: '#1E40AF',
       headingSize: '14px',
       bodySize: '11px',
-    },
-    executive: {
-      fontFamily: "'Georgia', serif",
-      primaryColor: '#1F2937',
-      secondaryColor: '#374151',
-      headingSize: '13px',
-      bodySize: '10.5px',
-    },
-    creative: {
-      fontFamily: "'Poppins', sans-serif",
-      primaryColor: '#7C3AED',
-      secondaryColor: '#6D28D9',
-      headingSize: '15px',
-      bodySize: '10px',
-    },
-    minimal: {
-      fontFamily: "'Helvetica', sans-serif",
-      primaryColor: '#059669',
-      secondaryColor: '#047857',
-      headingSize: '12px',
-      bodySize: '10px',
-    },
-    corporate: {
-      fontFamily: "'Arial', sans-serif",
-      primaryColor: '#0F766E',
-      secondaryColor: '#115E59',
-      headingSize: '13px',
-      bodySize: '10.5px',
-    },
-  };
+      smallSize: '9px',
+    };
+  }
 
-  return styles[templateId] || styles.modern;
+  return {
+    fontFamily: template.fonts.heading,
+    primaryColor: template.colors.primary,
+    secondaryColor: template.colors.secondary,
+    headingSize: template.fonts.sizes.headings,
+    bodySize: template.fonts.sizes.body,
+    smallSize: template.fonts.sizes.small,
+  };
 };
 
 // ============================================
