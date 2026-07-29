@@ -220,6 +220,162 @@ const DynamicSection: React.FC<DynamicSectionProps> = ({
         {sectionType === 'summary' && (
           <BulletTextarea placeholder="Write a compelling professional summary..." value={(sectionData as any).content || ''} onChange={v => updateSection('summary', { content: v })} rows={4} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
         )}
+        {sectionType === 'skills' && (
+  <div className="space-y-4">
+    {/* Technical Skills */}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-xs font-medium text-gray-700">Technical Skills</label>
+        <button
+          onClick={() => {
+            const currentTech = [...((sectionData as any).technical || [])];
+            currentTech.push({ name: '', level: 'Intermediate', category: 'Technical' });
+            updateSection('skills', { technical: currentTech });
+          }}
+          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+        >
+          + Add
+        </button>
+      </div>
+      {((sectionData as any).technical || []).map((skill: any, i: number) => (
+        <div key={i} className="flex gap-2 mb-2">
+          <LocalInput
+            value={skill.name || ''}
+            onChange={(v) => {
+              const tech = [...((sectionData as any).technical || [])];
+              tech[i] = { ...tech[i], name: v };
+              updateSection('skills', { technical: tech });
+            }}
+            className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="e.g., Python"
+          />
+          <select
+            value={skill.level || 'Intermediate'}
+            onChange={(e) => {
+              const tech = [...((sectionData as any).technical || [])];
+              tech[i] = { ...tech[i], level: e.target.value };
+              updateSection('skills', { technical: tech });
+            }}
+            className="w-32 px-2 py-2 text-sm border border-gray-200 rounded-lg"
+          >
+            <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
+          </select>
+          <button
+            onClick={() => {
+              const tech = ((sectionData as any).technical || []).filter((_: any, j: number) => j !== i);
+              updateSection('skills', { technical: tech });
+            }}
+            className="p-2 text-gray-400 hover:text-red-500"
+          >
+            <MdClose className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+
+    {/* Soft Skills */}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-xs font-medium text-gray-700">Soft Skills</label>
+        <button
+          onClick={() => {
+            const currentSoft = [...((sectionData as any).soft || [])];
+            currentSoft.push({ name: '', level: 'Intermediate', category: 'Soft Skills' });
+            updateSection('skills', { soft: currentSoft });
+          }}
+          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+        >
+          + Add
+        </button>
+      </div>
+      {((sectionData as any).soft || []).map((skill: any, i: number) => (
+        <div key={i} className="flex gap-2 mb-2">
+          <LocalInput
+            value={skill.name || ''}
+            onChange={(v) => {
+              const soft = [...((sectionData as any).soft || [])];
+              soft[i] = { ...soft[i], name: v };
+              updateSection('skills', { soft: soft });
+            }}
+            className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="e.g., Leadership"
+          />
+          <select
+            value={skill.level || 'Intermediate'}
+            onChange={(e) => {
+              const soft = [...((sectionData as any).soft || [])];
+              soft[i] = { ...soft[i], level: e.target.value };
+              updateSection('skills', { soft: soft });
+            }}
+            className="w-32 px-2 py-2 text-sm border border-gray-200 rounded-lg"
+          >
+            <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
+          </select>
+          <button
+            onClick={() => {
+              const soft = ((sectionData as any).soft || []).filter((_: any, j: number) => j !== i);
+              updateSection('skills', { soft: soft });
+            }}
+            className="p-2 text-gray-400 hover:text-red-500"
+          >
+            <MdClose className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+
+    {/* Tools */}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-xs font-medium text-gray-700">Tools & Technologies</label>
+        <button
+          onClick={() => {
+            const currentTools = [...((sectionData as any).tools || [])];
+            currentTools.push({ name: '', level: 'Intermediate', category: 'Tools' });
+            updateSection('skills', { tools: currentTools });
+          }}
+          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+        >
+          + Add
+        </button>
+      </div>
+      {((sectionData as any).tools || []).map((skill: any, i: number) => (
+        <div key={i} className="flex gap-2 mb-2">
+          <LocalInput
+            value={skill.name || ''}
+            onChange={(v) => {
+              const tools = [...((sectionData as any).tools || [])];
+              tools[i] = { ...tools[i], name: v };
+              updateSection('skills', { tools: tools });
+            }}
+            className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="e.g., Docker"
+          />
+          <select
+            value={skill.level || 'Intermediate'}
+            onChange={(e) => {
+              const tools = [...((sectionData as any).tools || [])];
+              tools[i] = { ...tools[i], level: e.target.value };
+              updateSection('skills', { tools: tools });
+            }}
+            className="w-32 px-2 py-2 text-sm border border-gray-200 rounded-lg"
+          >
+            <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
+          </select>
+          <button
+            onClick={() => {
+              const tools = ((sectionData as any).tools || []).filter((_: any, j: number) => j !== i);
+              updateSection('skills', { tools: tools });
+            }}
+            className="p-2 text-gray-400 hover:text-red-500"
+          >
+            <MdClose className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
       </div>
     );
   }
