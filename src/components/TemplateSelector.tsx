@@ -1,7 +1,7 @@
 // src/components/TemplateSelector.tsx
 // ============================================
 // TEMPLATE SELECTOR COMPONENT - Premium Previews
-// HOOKED INTO TEMPLATE ENGINE
+// FIXED: Button conflict removed
 // ============================================
 
 import React, { useState, useEffect } from 'react';
@@ -67,7 +67,6 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onSelect }) => {
               </div>
               <div className="flex-1 overflow-y-auto p-8 bg-gray-100 flex justify-center items-start">
                 <div className="shadow-xl bg-white w-full max-w-[620px] aspect-[8.5/11] overflow-hidden rounded-sm">
-                  {/* UPGRADED: Uses Engine to Render Preview */}
                   <div 
                     className="w-full h-full"
                     dangerouslySetInnerHTML={{ 
@@ -168,17 +167,8 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
           : 'border border-gray-200 hover:shadow-xl hover:border-blue-300'
         }
       `}
+      onClick={onSelect}
     >
-      {/* Interactive Hover Overlay */}
-      <div 
-        className="absolute inset-0 z-10 bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3"
-        onClick={(e) => { e.stopPropagation(); onFullscreen(); }}
-      >
-        <span className="px-4 py-2 bg-white text-gray-900 font-semibold rounded-lg shadow-lg flex items-center gap-2 hover:bg-gray-100">
-          <MdZoomIn className="w-5 h-5" /> Preview Full Size
-        </span>
-      </div>
-
       {/* Badges */}
       <div className="absolute top-4 left-4 z-10 flex gap-2 flex-wrap">
         {isRecommended && (
@@ -203,7 +193,6 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
       {/* The Mockup Container */}
       <div className="w-full aspect-[3/4] overflow-hidden bg-gray-50 p-4">
         <div className="w-full h-full shadow-sm bg-white rounded-sm overflow-hidden">
-          {/* UPGRADED: Uses Engine to Render Preview */}
           <div 
             className="w-full h-full"
             dangerouslySetInnerHTML={{ 
@@ -220,7 +209,7 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
           <p className="text-sm text-gray-500 mt-1 line-clamp-2">{template.description}</p>
         </div>
         
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-1">
+        <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-1 gap-2 flex-wrap">
           <div className="flex flex-col">
             <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">ATS Score</span>
             <span className={`text-lg font-bold ${
@@ -230,16 +219,25 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
               {template.atsCompatibility}%
             </span>
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); onSelect(); }}
-            className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${
-              isSelected 
-                ? 'bg-blue-100 text-blue-700 border-2 border-blue-200' 
-                : 'bg-gray-900 text-white hover:bg-gray-800 hover:shadow-md'
-            }`}
-          >
-            {isSelected ? 'Selected' : 'Use Template'}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* FIXED: Preview Button is here, safe from conflict */}
+            <button
+              onClick={(e) => { e.stopPropagation(); onFullscreen(); }}
+              className="px-4 py-2.5 text-sm font-semibold rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-1 shadow-sm"
+            >
+              <MdZoomIn className="w-4 h-4" /> Preview
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelect(); }}
+              className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm ${
+                isSelected 
+                  ? 'bg-blue-100 text-blue-700 border-2 border-blue-200' 
+                  : 'bg-gray-900 text-white hover:bg-gray-800 hover:shadow-md'
+              }`}
+            >
+              {isSelected ? 'Selected' : 'Use Template'}
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>
