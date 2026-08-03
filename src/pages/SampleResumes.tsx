@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MdDownload, MdStar, MdSearch, MdFilterList, MdVisibility, MdWork, MdSchool, MdVerified, MdTrendingUp, MdPeople, MdEmojiEvents, MdBusinessCenter, MdLightbulb, MdCheckCircle, MdAward, MdRocket, MdStars, MdFlashOn, MdInsights, MdLeaderboard, MdPsychology } from 'react-icons/md';
+import { 
+  MdDownload, MdStar, MdSearch, MdFilterList, MdVisibility, 
+  MdWork, MdSchool, MdVerified, MdTrendingUp, MdPeople, 
+  MdBusinessCenter, MdLightbulb, MdCheckCircle, 
+  MdRocket, MdStars, MdFlashOn, MdInsights, MdLeaderboard,
+  MdEmojiEvents 
+} from 'react-icons/md';
 import toast from 'react-hot-toast';
 
 // ============================================
