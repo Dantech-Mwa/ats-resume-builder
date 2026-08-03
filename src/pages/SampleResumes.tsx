@@ -3220,8 +3220,8 @@ const handleAutoPopulate = (resume: typeof sampleResumes[0]) => {
           technologies: [],
           aiSuggestions: [],
           industry: resume.industry || '',
-          companyType: 'Large Enterprise' as const, // ✅ FIXED: Use 'as const'
-          employmentType: 'Full-time' as const, // ✅ FIXED: Use 'as const'
+          companyType: 'Large Enterprise' as const,
+          employmentType: 'Full-time' as const,
           durationYears: 0,
           skillsGained: [],
           promotions: [],
@@ -3351,15 +3351,16 @@ const handleAutoPopulate = (resume: typeof sampleResumes[0]) => {
           level: 'International' as const,
           monetaryValue: 0,
         })) : [],
+        // ✅ FIXED: Referees mapping with correct field names
         referees: s.referees ? s.referees.map((ref: any) => ({
           id: `ref-${Date.now()}-${Math.random()}`,
-          name: ref.name || '',
-          position: ref.position || '',
-          company: ref.organization || '',
+          fullName: ref.name || '',
+          title: ref.position || '',
+          organization: ref.organization || '',
           email: ref.email || '',
           phone: ref.phone || '',
-          relationship: ref.relationship || 'Professional' as const,
-          isActive: true,
+          relationship: (ref.relationship || 'Professional') as any,
+          isVerified: true,
           notes: ref.notes || '',
         })) : [],
         customSections: [],
