@@ -3001,7 +3001,7 @@ const generateDOCX = async (resume: any) => {
   const children: Paragraph[] = [];
 
   // Helper to add paragraphs
-  const addParagraph = (text: string, bold: boolean = false, size: number = 20, alignment: AlignmentType = AlignmentType.LEFT) => {
+  const addParagraph = (text: string, bold: boolean = false, size: number = 20, alignment: any = AlignmentType.LEFT) => {
     children.push(new Paragraph({
       children: [new TextRun({ text, bold, size })],
       alignment,
@@ -3257,7 +3257,6 @@ const generateDOCX = async (resume: any) => {
 
   return doc;
 };
-
 // ============================================
 // MAIN COMPONENT
 // ============================================
