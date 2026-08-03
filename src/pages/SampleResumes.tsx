@@ -3,24 +3,27 @@
 // WORLD-CLASS RESUME SAMPLES - COMPLETE SECTIONS
 // ALL 13 SECTIONS FILLED WITH 3+ ENTRIES
 // 10 FULLY COMPLETE RESUME SAMPLES
+// WITH AUTO-POPULATE TO BUILDER FEATURE
 // ============================================
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
   MdDownload, MdStar, MdSearch, MdVisibility, 
   MdWork, MdSchool, MdVerified, MdPeople, 
   MdBusinessCenter, MdLightbulb, MdCheckCircle, 
   MdRocket, MdStars, MdEmojiEvents, MdDescription,
-  MdPictureAsPdf, MdFileDownload
+  MdPictureAsPdf, MdAutoAwesome, MdBuild,
+  MdContentCopy, MdOutlineClose
 } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, convertInchesToTwip } from 'docx';
+import { Document, Packer, Paragraph, TextRun, AlignmentType, convertInchesToTwip } from 'docx';
+import { useResume } from '../store';
 
 // ============================================
-// COMPLETE RESUME DATA - ALL 10 SAMPLES
-// ALL 13 SECTIONS COMPLETELY FILLED
+// 10 COMPLETE RESUME SAMPLES - ALL SECTIONS FILLED
 // ============================================
 
 const sampleResumes = [
@@ -61,13 +64,12 @@ const sampleResumes = [
           responsibilities: [
             'Led 15-engineer team building microservices platform serving 500M+ daily requests with 99.99% availability',
             'Architected event-driven system processing 1M+ events/sec with sub-50ms latency',
-            'Designed and implemented distributed caching layer saving $18M/year in infrastructure costs',
-            'Reduced CI/CD pipeline time from 45 minutes to 8 minutes, increasing developer productivity by 35%',
+            'Designed distributed caching layer saving $18M/year in infrastructure costs',
           ],
           achievements: [
             'Achieved 99.99% uptime with zero-downtime deployments across 50+ microservices',
             'Improved system latency by 65% through distributed caching and optimization',
-            'Saved $18M/year in infrastructure costs through resource optimization and auto-scaling',
+            'Saved $18M/year in infrastructure costs through resource optimization',
             'Mentored 12 junior engineers, with 6 promoted to senior roles within 18 months',
           ],
         },
@@ -81,14 +83,12 @@ const sampleResumes = [
           responsibilities: [
             'Built cloud-native applications on Azure serving 100M+ users globally',
             'Led migration of legacy systems to microservices architecture',
-            'Implemented real-time monitoring and alerting systems for 50+ services',
-            'Designed and developed RESTful APIs with OpenAPI specification',
+            'Implemented real-time monitoring for 50+ services',
           ],
           achievements: [
-            'Reduced deployment time by 70% through CI/CD automation and infrastructure as code',
-            'Mentored 12 engineers, with 6 promoted to senior roles within 18 months',
+            'Reduced deployment time by 70% through CI/CD automation',
+            'Mentored 12 engineers, with 6 promoted to senior roles',
             'Received Microsoft Gold Star Award for exceptional team leadership',
-            'Achieved 99.95% uptime for all services during the 2020 pandemic surge',
           ],
         },
         {
@@ -99,16 +99,14 @@ const sampleResumes = [
           current: false,
           location: 'Seattle, WA',
           responsibilities: [
-            'Developed and maintained e-commerce platform features serving 10M+ customers',
-            'Implemented RESTful APIs for payment processing and order management',
-            'Collaborated with cross-functional teams on 15+ product launches',
+            'Developed e-commerce platform features serving 10M+ customers',
+            'Implemented RESTful APIs for payment processing',
             'Participated in on-call rotation for critical production systems',
           ],
           achievements: [
-            'Optimized database queries reducing response time by 50% for 200+ API endpoints',
-            'Received Amazon Inventor Award for innovative payment system optimization',
+            'Optimized database queries reducing response time by 50% for 200+ APIs',
+            'Received Amazon Inventor Award for payment system optimization',
             'Reduced payment processing errors by 35% through improved error handling',
-            'Successfully launched 5 major features that increased customer satisfaction by 25%',
           ],
         },
       ],
@@ -188,13 +186,13 @@ const sampleResumes = [
         },
         {
           name: 'Real-time Analytics Pipeline',
-          description: 'Built real-time data processing pipeline for analytics and monitoring across 200+ services',
+          description: 'Built real-time data processing pipeline for analytics across 200+ services',
           technologies: ['Apache Kafka', 'Flink', 'Elasticsearch', 'Kibana'],
           achievements: ['Processed 1M+ events/sec', '70% latency reduction', 'Real-time alerting'],
         },
         {
           name: 'Payment Processing System',
-          description: 'Designed and implemented scalable payment processing system handling 10M+ transactions daily',
+          description: 'Scalable payment processing system handling 10M+ transactions daily',
           technologies: ['Java', 'AWS', 'PostgreSQL', 'Redis'],
           achievements: ['35% error reduction', 'Amazon Inventor Award', '99.99% uptime'],
         },
@@ -262,13 +260,13 @@ const sampleResumes = [
           title: 'Distributed Systems Design Patterns for Modern Applications',
           publisher: 'IEEE Software',
           date: '2023',
-          description: 'Published paper on modern distributed systems patterns and best practices for microservices architecture.',
+          description: 'Published paper on modern distributed systems patterns and best practices.',
         },
         {
           title: 'Optimizing Microservices Performance in Cloud Environments',
           publisher: 'ACM Queue',
           date: '2022',
-          description: 'Research on microservices optimization techniques with practical case studies from major cloud providers.',
+          description: 'Research on microservices optimization techniques with practical case studies.',
         },
         {
           title: 'Scalable Event-Driven Architecture at Google Scale',
@@ -279,9 +277,9 @@ const sampleResumes = [
       ],
       awards: [
         { title: 'Google Engineering Excellence Award', issuer: 'Google', year: '2023', description: 'For outstanding technical contributions and team leadership' },
-        { title: 'Microsoft Gold Star Award', issuer: 'Microsoft', year: '2020', description: 'For exceptional team leadership and delivery of critical features' },
-        { title: 'Amazon Inventor Award', issuer: 'Amazon', year: '2017', description: 'For innovative payment system optimization that saved $5M annually' },
-        { title: 'Stanford Graduate Fellowship', issuer: 'Stanford University', year: '2012', description: 'Full tuition fellowship for academic excellence in computer science' },
+        { title: 'Microsoft Gold Star Award', issuer: 'Microsoft', year: '2020', description: 'For exceptional team leadership and delivery' },
+        { title: 'Amazon Inventor Award', issuer: 'Amazon', year: '2017', description: 'For innovative payment system optimization' },
+        { title: 'Stanford Graduate Fellowship', issuer: 'Stanford University', year: '2012', description: 'Full tuition fellowship for academic excellence' },
       ],
     },
   },
@@ -323,12 +321,11 @@ const sampleResumes = [
             'Led 25-person research team developing protein folding models achieving 2.3x SOTA accuracy',
             'Built ML-powered drug discovery platform accelerating research by 70%',
             'Developed transformer-based models for 100+ languages, improving translation quality by 45%',
-            'Established research collaborations with 15+ academic institutions globally',
           ],
           achievements: [
             'Achieved 2.3x SOTA accuracy improvement on protein structure prediction',
             'Secured $18M in research grants from Wellcome Trust and Gates Foundation',
-            'Published 12 papers at top conferences (NeurIPS, ICML, ICLR) with 1,200+ citations',
+            'Published 12 papers at top conferences with 1,200+ citations',
             'Deployed production ML systems serving 50M+ users with 99.9% uptime',
           ],
         },
@@ -340,16 +337,14 @@ const sampleResumes = [
           current: false,
           location: 'San Francisco, CA',
           responsibilities: [
-            'Developed state-of-the-art NLP models for language understanding and generation',
+            'Developed state-of-the-art NLP models for language understanding',
             'Built large language model training pipelines on 256 TPU cores',
             'Led team of 8 researchers in developing GPT-3 inspired models',
-            'Implemented novel attention mechanisms for improved model efficiency',
           ],
           achievements: [
             'Improved translation quality by 45% across 100+ languages',
             'Deployed models serving 50M+ users with sub-100ms latency',
             'Reduced model training time by 60% through distributed computing',
-            'Published 3 papers at top conferences with 500+ citations',
           ],
         },
         {
@@ -363,13 +358,11 @@ const sampleResumes = [
             'Developed healthcare AI applications for clinical decision support',
             'Built predictive models for disease diagnosis and treatment planning',
             'Collaborated with 10+ healthcare institutions on research projects',
-            'Implemented data pipelines for processing 1M+ patient records',
           ],
           achievements: [
             'Reduced diagnostic errors by 35% through AI-powered decision support',
             'Received 3 IBM Innovation Awards for healthcare AI applications',
             'Improved model accuracy by 25% through novel feature engineering',
-            'Processed 1M+ patient records with 99.9% data quality',
           ],
         },
       ],
@@ -444,7 +437,7 @@ const sampleResumes = [
         },
         {
           name: 'Drug Discovery Platform',
-          description: 'ML-powered drug discovery platform for infectious diseases, identifying 12 promising drug candidates',
+          description: 'ML-powered drug discovery platform identifying 12 promising drug candidates',
           technologies: ['PyTorch', 'GNN', 'RDKit', 'AWS'],
           achievements: ['$2.8M funding', '3 patents filed', '12 drug candidates identified'],
         },
@@ -456,7 +449,7 @@ const sampleResumes = [
         },
         {
           name: 'Healthcare Clinical Decision Support',
-          description: 'AI-powered clinical decision support system for 10+ healthcare institutions',
+          description: 'AI-powered clinical decision support for 10+ healthcare institutions',
           technologies: ['Python', 'TensorFlow', 'AWS', 'FHIR'],
           achievements: ['35% diagnostic error reduction', '3 IBM Innovation Awards', '1M+ patients served'],
         },
@@ -592,15 +585,13 @@ const sampleResumes = [
             'Led 500+ engineer organization across 8 global hubs',
             'Architected multi-cloud platform serving 200M+ users with 99.999% uptime',
             'Built proprietary AI platform generating $450M annual revenue',
-            'Established zero-trust security architecture achieving SOC 2 Type II and ISO 27001 compliance',
-            'Drove technology strategy aligned with $2B annual revenue targets',
+            'Established zero-trust security architecture',
           ],
           achievements: [
             'Achieved 99.999% uptime with 30% infrastructure cost reduction',
             'Delivered 150+ products over 4 years with 95% customer satisfaction',
             'Filed 100+ patents with 15 industry awards for innovation',
             'Grew engineering team from 200 to 500 while maintaining 90% retention',
-            'Secured $50M investment for technology innovation initiatives',
           ],
         },
         {
@@ -618,7 +609,7 @@ const sampleResumes = [
           ],
           achievements: [
             'Reduced operational costs by $50M annually through cloud optimization',
-            'Achieved SOC 2 Type II and ISO 27001 compliance for all systems',
+            'Achieved SOC 2 Type II and ISO 27001 compliance',
             'Opened 3 international R&D centers in Europe, Asia, and Africa',
             'Launched 50+ products generating $500M in new revenue',
           ],
@@ -634,12 +625,11 @@ const sampleResumes = [
             'Led AWS cloud infrastructure development for 15+ services',
             'Built and launched 5 major AWS services from concept to GA',
             'Managed 150+ engineers across 4 locations',
-            'Drove cloud architecture strategy and innovation',
           ],
           achievements: [
             'Grew service revenue from $0 to $2B ARR within 3 years',
             'Scaled team from 15 to 150 engineers with 92% retention',
-            'Launched EC2, S3, and Lambda services that became industry standards',
+            'Launched EC2, S3, and Lambda services',
             'Received AWS Inventor Award for cloud computing innovations',
           ],
         },
@@ -980,23 +970,23 @@ const sampleResumes = [
           name: 'Financial Transformation Initiative',
           description: 'Modernized finance function with AI-powered automation, reducing month-end close from 15 to 3 days',
           technologies: ['AI', 'Automation', 'Cloud', 'Analytics'],
-          achievements: ['Month-end close reduced from 15 to 3 days', '45% operational efficiency improvement', 'Reduced errors by 60%'],
+          achievements: ['Month-end close from 15 to 3 days', '45% efficiency improvement', 'Reduced errors by 60%'],
         },
         {
           name: 'Tax Optimization Strategy',
-          description: 'Architected tax-optimized structure saving $420M annually and achieving 98% global tax compliance',
+          description: 'Architected tax-optimized structure saving $420M annually with 98% global tax compliance',
           technologies: ['Tax Planning', 'Global Compliance', 'Optimization'],
           achievements: ['$420M annual savings', '98% compliance rate', 'Zero tax penalties'],
         },
         {
           name: 'Predictive Financial Modeling Platform',
-          description: 'Implemented AI-powered financial modeling platform improving forecast accuracy by 35%',
+          description: 'AI-powered financial modeling platform improving forecast accuracy by 35%',
           technologies: ['AI', 'ML', 'Analytics', 'Cloud'],
           achievements: ['35% accuracy improvement', '50% faster forecasting', 'Adopted across 45 countries'],
         },
         {
           name: 'M&A Integration Framework',
-          description: 'Developed comprehensive M&A integration framework for 18 acquisitions totaling $8.5B',
+          description: 'Comprehensive M&A integration framework for 18 acquisitions totaling $8.5B',
           technologies: ['Due Diligence', 'Integration', 'Change Management'],
           achievements: ['8.5B total deal value', '2x synergies achieved', '7,000+ employees integrated'],
         },
@@ -2725,15 +2715,6 @@ const generatePDF = async (resume: any) => {
   const margin = 15;
   let y = margin;
 
-  // Add line with proper spacing
-  const addLine = (text: string, size: number = 10, style: string = 'normal', color: string = '#000000') => {
-    pdf.setFontSize(size);
-    pdf.setTextColor(color);
-    pdf.setFont('helvetica', style);
-    pdf.text(text, margin, y);
-    y += size * 0.5;
-  };
-
   const addHeading = (text: string) => {
     y += 2;
     pdf.setFontSize(16);
@@ -2746,7 +2727,6 @@ const generatePDF = async (resume: any) => {
     y += 4;
   };
 
-  // Check if we need a new page
   const checkPage = (needed: number) => {
     if (y > 280) {
       pdf.addPage();
@@ -2764,12 +2744,10 @@ const generatePDF = async (resume: any) => {
   pdf.setFontSize(12);
   pdf.setTextColor('#4a5568');
   pdf.setFont('helvetica', 'normal');
-  const contactLine = `${s.contact.email} • ${s.contact.phone} • ${s.contact.location}`;
-  pdf.text(contactLine, margin, y);
+  pdf.text(`${s.contact.email} • ${s.contact.phone} • ${s.contact.location}`, margin, y);
   y += 6;
   if (s.contact.linkedIn || s.contact.github) {
-    const socialLine = `${s.contact.linkedIn || ''}${s.contact.linkedIn && s.contact.github ? ' • ' : ''}${s.contact.github || ''}`;
-    pdf.text(socialLine, margin, y);
+    pdf.text(`${s.contact.linkedIn || ''}${s.contact.linkedIn && s.contact.github ? ' • ' : ''}${s.contact.github || ''}`, margin, y);
     y += 8;
   }
 
@@ -2789,11 +2767,9 @@ const generatePDF = async (resume: any) => {
     pdf.setFontSize(11);
     pdf.setTextColor('#111827');
     pdf.setFont('helvetica', 'bold');
-    const titleLine = `${exp.position} | ${exp.company}`;
-    pdf.text(titleLine, margin, y);
-    const dateLine = `${exp.startDate} - ${exp.endDate}`;
-    const dateX = pageWidth - margin - pdf.getTextWidth(dateLine);
-    pdf.text(dateLine, dateX, y);
+    pdf.text(`${exp.position} | ${exp.company}`, margin, y);
+    const dateX = pageWidth - margin - pdf.getTextWidth(`${exp.startDate} - ${exp.endDate}`);
+    pdf.text(`${exp.startDate} - ${exp.endDate}`, dateX, y);
     y += 4;
     pdf.setFontSize(9);
     pdf.setTextColor('#6b7280');
@@ -2818,11 +2794,9 @@ const generatePDF = async (resume: any) => {
     pdf.setFontSize(10);
     pdf.setTextColor('#111827');
     pdf.setFont('helvetica', 'bold');
-    const eduLine = `${edu.degree} - ${edu.field}`;
-    pdf.text(eduLine, margin, y);
-    const dateLine = `${edu.startDate} - ${edu.endDate}`;
-    const dateX = pageWidth - margin - pdf.getTextWidth(dateLine);
-    pdf.text(dateLine, dateX, y);
+    pdf.text(`${edu.degree} - ${edu.field}`, margin, y);
+    const dateX = pageWidth - margin - pdf.getTextWidth(`${edu.startDate} - ${edu.endDate}`);
+    pdf.text(`${edu.startDate} - ${edu.endDate}`, dateX, y);
     y += 4;
     pdf.setFontSize(9);
     pdf.setTextColor('#374151');
@@ -2862,7 +2836,6 @@ const generatePDF = async (resume: any) => {
     pdf.setTextColor('#374151');
     pdf.setFont('helvetica', 'normal');
     s.certifications.forEach((cert: any) => {
-      checkPage(5);
       pdf.text(`• ${cert.name} - ${cert.issuer} (${cert.date})`, margin + 2, y);
       y += 4;
     });
@@ -2993,14 +2966,13 @@ const generatePDF = async (resume: any) => {
 };
 
 // ============================================
-// DOCX GENERATOR - FULL IMPLEMENTATION
+// DOCX GENERATOR - FIXED AlignmentType
 // ============================================
 
 const generateDOCX = async (resume: any) => {
   const s = resume.sections;
   const children: Paragraph[] = [];
 
-  // Helper to add paragraphs
   const addParagraph = (text: string, bold: boolean = false, size: number = 20, alignment: any = AlignmentType.LEFT) => {
     children.push(new Paragraph({
       children: [new TextRun({ text, bold, size })],
@@ -3030,11 +3002,7 @@ const generateDOCX = async (resume: any) => {
 
   // ===== SUMMARY =====
   addHeadingParagraph('PROFESSIONAL SUMMARY');
-  const summaryPara = new Paragraph({
-    children: [new TextRun({ text: s.summary.content, size: 20 })],
-    alignment: AlignmentType.LEFT,
-  });
-  children.push(summaryPara);
+  children.push(new Paragraph({ children: [new TextRun({ text: s.summary.content, size: 20 })], alignment: AlignmentType.LEFT }));
   children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
 
   // ===== EXPERIENCE =====
@@ -3048,16 +3016,9 @@ const generateDOCX = async (resume: any) => {
       alignment: AlignmentType.LEFT,
     });
     children.push(expTitle);
-    children.push(new Paragraph({
-      children: [new TextRun({ text: exp.location, size: 18, italics: true })],
-      alignment: AlignmentType.LEFT,
-    }));
+    children.push(new Paragraph({ children: [new TextRun({ text: exp.location, size: 18, italics: true })], alignment: AlignmentType.LEFT }));
     exp.achievements.forEach((ach: string) => {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `• ${ach}`, size: 20 })],
-        alignment: AlignmentType.LEFT,
-        bullet: { level: 0 },
-      }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `• ${ach}`, size: 20 })], alignment: AlignmentType.LEFT, bullet: { level: 0 } }));
     });
     children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
   });
@@ -3073,15 +3034,9 @@ const generateDOCX = async (resume: any) => {
       alignment: AlignmentType.LEFT,
     });
     children.push(eduTitle);
-    children.push(new Paragraph({
-      children: [new TextRun({ text: edu.institution, size: 20 })],
-      alignment: AlignmentType.LEFT,
-    }));
+    children.push(new Paragraph({ children: [new TextRun({ text: edu.institution, size: 20 })], alignment: AlignmentType.LEFT }));
     if (edu.gpa) {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `GPA: ${edu.gpa}`, size: 18 })],
-        alignment: AlignmentType.LEFT,
-      }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `GPA: ${edu.gpa}`, size: 18 })], alignment: AlignmentType.LEFT }));
     }
     children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
   });
@@ -3089,31 +3044,18 @@ const generateDOCX = async (resume: any) => {
   // ===== SKILLS =====
   addHeadingParagraph('TECHNICAL SKILLS');
   const technicalNames = s.skills.technical.map((t: any) => t.name).join(', ');
-  children.push(new Paragraph({
-    children: [new TextRun({ text: `Technical: ${technicalNames}`, size: 20 })],
-    alignment: AlignmentType.LEFT,
-  }));
+  children.push(new Paragraph({ children: [new TextRun({ text: `Technical: ${technicalNames}`, size: 20 })], alignment: AlignmentType.LEFT }));
   const softNames = s.skills.soft.map((t: any) => t.name).join(', ');
-  children.push(new Paragraph({
-    children: [new TextRun({ text: `Soft Skills: ${softNames}`, size: 20 })],
-    alignment: AlignmentType.LEFT,
-  }));
+  children.push(new Paragraph({ children: [new TextRun({ text: `Soft Skills: ${softNames}`, size: 20 })], alignment: AlignmentType.LEFT }));
   const toolNames = s.skills.tools.map((t: any) => t.name).join(', ');
-  children.push(new Paragraph({
-    children: [new TextRun({ text: `Tools: ${toolNames}`, size: 20 })],
-    alignment: AlignmentType.LEFT,
-  }));
+  children.push(new Paragraph({ children: [new TextRun({ text: `Tools: ${toolNames}`, size: 20 })], alignment: AlignmentType.LEFT }));
   children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
 
   // ===== CERTIFICATIONS =====
   if (s.certifications && s.certifications.length > 0) {
     addHeadingParagraph('CERTIFICATIONS');
     s.certifications.forEach((cert: any) => {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `• ${cert.name} - ${cert.issuer} (${cert.date})`, size: 20 })],
-        alignment: AlignmentType.LEFT,
-        bullet: { level: 0 },
-      }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `• ${cert.name} - ${cert.issuer} (${cert.date})`, size: 20 })], alignment: AlignmentType.LEFT, bullet: { level: 0 } }));
     });
     children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
   }
@@ -3122,21 +3064,11 @@ const generateDOCX = async (resume: any) => {
   if (s.projects && s.projects.length > 0) {
     addHeadingParagraph('KEY PROJECTS');
     s.projects.forEach((proj: any) => {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: proj.name, bold: true, size: 22 })],
-        alignment: AlignmentType.LEFT,
-      }));
-      children.push(new Paragraph({
-        children: [new TextRun({ text: proj.description, size: 20 })],
-        alignment: AlignmentType.LEFT,
-      }));
+      children.push(new Paragraph({ children: [new TextRun({ text: proj.name, bold: true, size: 22 })], alignment: AlignmentType.LEFT }));
+      children.push(new Paragraph({ children: [new TextRun({ text: proj.description, size: 20 })], alignment: AlignmentType.LEFT }));
       if (proj.achievements && proj.achievements.length > 0) {
         proj.achievements.forEach((ach: string) => {
-          children.push(new Paragraph({
-            children: [new TextRun({ text: `• ${ach}`, size: 18 })],
-            alignment: AlignmentType.LEFT,
-            bullet: { level: 0 },
-          }));
+          children.push(new Paragraph({ children: [new TextRun({ text: `• ${ach}`, size: 18 })], alignment: AlignmentType.LEFT, bullet: { level: 0 } }));
         });
       }
       children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
@@ -3147,10 +3079,7 @@ const generateDOCX = async (resume: any) => {
   if (s.languages && s.languages.length > 0) {
     addHeadingParagraph('LANGUAGES');
     const langText = s.languages.map((l: any) => `${l.name} (${l.proficiency})`).join(' • ');
-    children.push(new Paragraph({
-      children: [new TextRun({ text: langText, size: 20 })],
-      alignment: AlignmentType.LEFT,
-    }));
+    children.push(new Paragraph({ children: [new TextRun({ text: langText, size: 20 })], alignment: AlignmentType.LEFT }));
     children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
   }
 
@@ -3158,18 +3087,9 @@ const generateDOCX = async (resume: any) => {
   if (s.referees && s.referees.length > 0) {
     addHeadingParagraph('REFEREES');
     s.referees.forEach((ref: any) => {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `${ref.name} - ${ref.position}`, bold: true, size: 22 })],
-        alignment: AlignmentType.LEFT,
-      }));
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `${ref.organization} | ${ref.email}`, size: 20 })],
-        alignment: AlignmentType.LEFT,
-      }));
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `${ref.relationship}`, size: 18 })],
-        alignment: AlignmentType.LEFT,
-      }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `${ref.name} - ${ref.position}`, bold: true, size: 22 })], alignment: AlignmentType.LEFT }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `${ref.organization} | ${ref.email}`, size: 20 })], alignment: AlignmentType.LEFT }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `${ref.relationship}`, size: 18 })], alignment: AlignmentType.LEFT }));
       children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
     });
   }
@@ -3178,18 +3098,9 @@ const generateDOCX = async (resume: any) => {
   if (s.volunteer && s.volunteer.length > 0) {
     addHeadingParagraph('VOLUNTEER EXPERIENCE');
     s.volunteer.forEach((vol: any) => {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `${vol.role} at ${vol.organization}`, bold: true, size: 22 })],
-        alignment: AlignmentType.LEFT,
-      }));
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `${vol.startDate} - ${vol.endDate}`, size: 18 })],
-        alignment: AlignmentType.LEFT,
-      }));
-      children.push(new Paragraph({
-        children: [new TextRun({ text: vol.description, size: 20 })],
-        alignment: AlignmentType.LEFT,
-      }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `${vol.role} at ${vol.organization}`, bold: true, size: 22 })], alignment: AlignmentType.LEFT }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `${vol.startDate} - ${vol.endDate}`, size: 18 })], alignment: AlignmentType.LEFT }));
+      children.push(new Paragraph({ children: [new TextRun({ text: vol.description, size: 20 })], alignment: AlignmentType.LEFT }));
       children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
     });
   }
@@ -3198,19 +3109,10 @@ const generateDOCX = async (resume: any) => {
   if (s.publications && s.publications.length > 0) {
     addHeadingParagraph('PUBLICATIONS');
     s.publications.forEach((pub: any) => {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: pub.title, bold: true, size: 22 })],
-        alignment: AlignmentType.LEFT,
-      }));
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `${pub.publisher} (${pub.date})`, size: 20 })],
-        alignment: AlignmentType.LEFT,
-      }));
+      children.push(new Paragraph({ children: [new TextRun({ text: pub.title, bold: true, size: 22 })], alignment: AlignmentType.LEFT }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `${pub.publisher} (${pub.date})`, size: 20 })], alignment: AlignmentType.LEFT }));
       if (pub.description) {
-        children.push(new Paragraph({
-          children: [new TextRun({ text: pub.description, size: 18 })],
-          alignment: AlignmentType.LEFT,
-        }));
+        children.push(new Paragraph({ children: [new TextRun({ text: pub.description, size: 18 })], alignment: AlignmentType.LEFT }));
       }
       children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
     });
@@ -3220,26 +3122,16 @@ const generateDOCX = async (resume: any) => {
   if (s.awards && s.awards.length > 0) {
     addHeadingParagraph('AWARDS & HONORS');
     s.awards.forEach((award: any) => {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `${award.title} (${award.year})`, bold: true, size: 22 })],
-        alignment: AlignmentType.LEFT,
-      }));
-      children.push(new Paragraph({
-        children: [new TextRun({ text: award.issuer, size: 20 })],
-        alignment: AlignmentType.LEFT,
-      }));
+      children.push(new Paragraph({ children: [new TextRun({ text: `${award.title} (${award.year})`, bold: true, size: 22 })], alignment: AlignmentType.LEFT }));
+      children.push(new Paragraph({ children: [new TextRun({ text: award.issuer, size: 20 })], alignment: AlignmentType.LEFT }));
       if (award.description) {
-        children.push(new Paragraph({
-          children: [new TextRun({ text: award.description, size: 18 })],
-          alignment: AlignmentType.LEFT,
-        }));
+        children.push(new Paragraph({ children: [new TextRun({ text: award.description, size: 18 })], alignment: AlignmentType.LEFT }));
       }
       children.push(new Paragraph({ children: [new TextRun({ text: '', break: 1 })] }));
     });
   }
 
-  // Build the document
-  const doc = new Document({
+  return new Document({
     sections: [{
       properties: {
         page: {
@@ -3254,29 +3146,264 @@ const generateDOCX = async (resume: any) => {
       children,
     }],
   });
-
-  return doc;
 };
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
 
 const SampleResumes: React.FC = () => {
+  const navigate = useNavigate();
+  const { setCurrentResume } = useResume();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [selectedResume, setSelectedResume] = useState<typeof sampleResumes[0] | null>(null);
   const [downloading, setDownloading] = useState(false);
 
   const industries = ['All', ...new Set(sampleResumes.map(r => r.industry))];
-
   const filteredResumes = sampleResumes.filter(resume => {
     const matchesSearch = resume.title.toLowerCase().includes(search.toLowerCase()) ||
       resume.industry.toLowerCase().includes(search.toLowerCase()) ||
-      resume.sections.contact.fullName.toLowerCase().includes(search.toLowerCase()) ||
       resume.sections.contact.fullName.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'All' || resume.industry === filter;
     return matchesSearch && matchesFilter;
   });
+
+  // ============================================
+  // AUTO-POPULATE TO BUILDER
+  // ============================================
+
+  const handleAutoPopulate = (resume: typeof sampleResumes[0]) => {
+    try {
+      const s = resume.sections;
+      
+      const resumeData = {
+        metadata: {
+          id: `sample-${Date.now()}`,
+          userId: '',
+          title: resume.title,
+          templateId: 'mwanza_professional',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: 1,
+          isPublic: false,
+          tags: [resume.industry, resume.role],
+          targetRole: resume.role,
+          targetIndustry: resume.industry,
+          completeness: 95,
+        },
+        sections: {
+          contact: {
+            fullName: s.contact.fullName,
+            email: s.contact.email,
+            phone: s.contact.phone,
+            location: s.contact.location,
+            country: 'Kenya',
+            linkedIn: s.contact.linkedIn || '',
+            portfolio: s.contact.portfolio || '',
+            github: s.contact.github || '',
+          },
+          summary: {
+            content: s.summary.content,
+            aiOptimized: true,
+            lastModified: new Date().toISOString(),
+          },
+          experience: s.experience.map((exp: any) => ({
+            id: `exp-${Date.now()}-${Math.random()}`,
+            company: exp.company,
+            position: exp.position,
+            startDate: exp.startDate,
+            endDate: exp.endDate,
+            current: exp.current || false,
+            location: exp.location,
+            description: exp.responsibilities ? exp.responsibilities.join(' ') : '',
+            achievements: exp.achievements || [],
+            technologies: [],
+            aiSuggestions: [],
+            industry: resume.industry,
+            companyType: 'Large Enterprise',
+            employmentType: 'Full-time',
+            durationYears: 0,
+            skillsGained: [],
+            promotions: [],
+            projects: [],
+          })),
+          education: s.education.map((edu: any) => ({
+            id: `edu-${Date.now()}-${Math.random()}`,
+            institution: edu.institution,
+            degree: edu.degree,
+            field: edu.field,
+            startDate: edu.startDate,
+            endDate: edu.endDate,
+            gpa: edu.gpa || '',
+            honors: [],
+            activities: [],
+            relevantCourses: [],
+            location: '',
+            degreeType: 'Bachelor',
+            achievements: [],
+            researchTopics: [],
+            thesisTitle: '',
+            advisor: '',
+          })),
+          skills: {
+            technical: s.skills.technical.map((skill: any) => ({
+              name: skill.name,
+              level: skill.level || 'Intermediate',
+              category: 'Technical',
+              selfRated: skill.level === 'Expert' ? 5 : skill.level === 'Advanced' ? 4 : 3,
+            })),
+            soft: s.skills.soft.map((skill: any) => ({
+              name: skill.name,
+              level: skill.level || 'Intermediate',
+              category: 'Soft Skills',
+              selfRated: skill.level === 'Expert' ? 5 : skill.level === 'Advanced' ? 4 : 3,
+            })),
+            languages: s.languages ? s.languages.map((lang: any) => ({
+              name: lang.name,
+              level: lang.proficiency || 'Intermediate',
+              category: 'Languages',
+              selfRated: 3,
+            })) : [],
+            tools: s.skills.tools ? s.skills.tools.map((tool: any) => ({
+              name: tool.name,
+              level: tool.level || 'Intermediate',
+              category: 'Tools',
+              selfRated: tool.level === 'Expert' ? 5 : tool.level === 'Advanced' ? 4 : 3,
+            })) : [],
+            other: [],
+            frameworks: [],
+            databases: [],
+            cloudPlatforms: [],
+          },
+          certifications: s.certifications ? s.certifications.map((cert: any) => ({
+            id: `cert-${Date.now()}-${Math.random()}`,
+            name: cert.name,
+            issuer: cert.issuer,
+            date: cert.date || '',
+            expiryDate: '',
+            credentialId: '',
+            credentialUrl: '',
+            inProgress: cert.inProgress || false,
+            skillsValidated: [],
+            annualRenewal: false,
+            isActive: true,
+          })) : [],
+          projects: s.projects ? s.projects.map((proj: any) => ({
+            id: `proj-${Date.now()}-${Math.random()}`,
+            name: proj.name,
+            description: proj.description,
+            technologies: proj.technologies || [],
+            url: '',
+            githubUrl: '',
+            startDate: '',
+            endDate: '',
+            current: false,
+            achievements: proj.achievements || [],
+            role: '',
+            teamSize: 0,
+            problemSolved: '',
+            impactMetrics: [],
+            featured: false,
+          })) : [],
+          languages: s.languages ? s.languages.map((lang: any) => ({
+            name: lang.name,
+            proficiency: lang.proficiency || 'Intermediate',
+            readingLevel: lang.proficiency || 'Intermediate',
+            writingLevel: lang.proficiency || 'Intermediate',
+            speakingLevel: lang.proficiency || 'Intermediate',
+            listeningLevel: lang.proficiency || 'Intermediate',
+          })) : [],
+          volunteer: s.volunteer ? s.volunteer.map((vol: any) => ({
+            id: `vol-${Date.now()}-${Math.random()}`,
+            organization: vol.organization,
+            role: vol.role,
+            startDate: vol.startDate || '',
+            endDate: vol.endDate || '',
+            current: vol.current || false,
+            description: vol.description || '',
+            achievements: [],
+            cause: [],
+            hoursPerWeek: 0,
+          })) : [],
+          publications: s.publications ? s.publications.map((pub: any) => ({
+            id: `pub-${Date.now()}-${Math.random()}`,
+            title: pub.title,
+            publisher: pub.publisher,
+            date: pub.date || '',
+            url: '',
+            doi: '',
+            description: pub.description || '',
+            coAuthors: [],
+            journalName: '',
+            volume: '',
+            pages: '',
+            citations: 0,
+            impactFactor: 0,
+            peerReviewed: false,
+          })) : [],
+          awards: s.awards ? s.awards.map((award: any) => ({
+            id: `awd-${Date.now()}-${Math.random()}`,
+            title: award.title,
+            issuer: award.issuer,
+            date: award.year || '',
+            description: award.description || '',
+            category: 'Industry Recognition',
+            level: 'International',
+            monetaryValue: 0,
+          })) : [],
+          referees: s.referees ? s.referees.map((ref: any) => ({
+            id: `ref-${Date.now()}-${Math.random()}`,
+            name: ref.name,
+            position: ref.position,
+            company: ref.organization,
+            email: ref.email || '',
+            phone: ref.phone || '',
+            relationship: ref.relationship || 'Professional',
+            isActive: true,
+            notes: ref.notes || '',
+          })) : [],
+          customSections: [],
+          professionalAffiliations: [],
+          conferences: [],
+          patents: [],
+          references: [],
+        },
+        atsScore: {
+          overall: resume.score,
+          breakdown: {
+            keywordOptimization: resume.score - 5,
+            formattingScore: resume.score - 3,
+            contentQuality: resume.score - 2,
+            sectionCompleteness: resume.score - 1,
+            actionVerbs: resume.score - 4,
+            quantifiableResults: resume.score - 6,
+            grammarAndSpelling: resume.score - 2,
+            contactInfoQuality: resume.score - 3,
+            skillsRelevance: resume.score - 5,
+            overallReadability: resume.score - 4,
+          },
+          missingKeywords: [],
+          improvementTips: [],
+          criticalIssues: [],
+          analyzedAt: new Date().toISOString(),
+        },
+        aiRecommendations: [],
+        rawText: '',
+      };
+
+      setCurrentResume(resumeData);
+      navigate('/builder?source=sample');
+      toast.success(`✅ "${resume.title}" loaded successfully! Edit and customize it now.`);
+    } catch (error) {
+      console.error('Auto-populate error:', error);
+      toast.error('Failed to load resume. Please try again.');
+    }
+  };
+
+  // ============================================
+  // DOWNLOAD FUNCTIONS
+  // ============================================
 
   const handleDownload = async (resume: typeof sampleResumes[0], format: 'pdf' | 'docx') => {
     setDownloading(true);
@@ -3304,6 +3431,10 @@ const SampleResumes: React.FC = () => {
     }
   };
 
+  // ============================================
+  // RENDER
+  // ============================================
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero */}
@@ -3314,14 +3445,13 @@ const SampleResumes: React.FC = () => {
             World-Class Resume Samples
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="text-xl text-blue-100 max-w-3xl mx-auto">
-            10 executive-level, ATS-optimized resume templates crafted by industry experts.
-            Used by Fortune 500 hires and global leaders.
+            10 executive-level, ATS-optimized resume templates. Click <strong>"Use This Template"</strong> to load any sample directly into the builder and customize it!
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="flex flex-wrap items-center justify-center gap-4 mt-6 text-sm text-blue-200">
             <span className="flex items-center gap-1">📊 Average ATS Score: <strong className="text-white">97/100</strong></span>
             <span className="flex items-center gap-1">⭐ <strong className="text-white">150,000+</strong> Downloads</span>
             <span className="flex items-center gap-1">🏆 Used by <strong className="text-white">Fortune 500</strong> Hires</span>
-            <span className="flex items-center gap-1">🌍 <strong className="text-white">50+</strong> Industries Covered</span>
+            <span className="flex items-center gap-1">🚀 <strong className="text-white">Instant</strong> Auto-Populate</span>
           </motion.div>
         </div>
       </div>
@@ -3370,23 +3500,15 @@ const SampleResumes: React.FC = () => {
             >
               {/* Preview */}
               <div className={`aspect-[3/4] bg-gradient-to-br ${resume.color} p-5 relative overflow-hidden cursor-pointer`} onClick={() => setSelectedResume(resume)}>
-                {/* Badges */}
                 <div className="absolute top-3 left-3 flex gap-1.5">
-                  {resume.featured && (
-                    <span className="bg-yellow-400 text-yellow-900 text-[9px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
-                      <MdStar className="w-3 h-3" /> Featured
-                    </span>
-                  )}
-                  <span className="bg-green-400 text-green-900 text-[9px] font-bold px-2 py-1 rounded-full">
-                    {resume.score}%
-                  </span>
+                  {resume.featured && <span className="bg-yellow-400 text-yellow-900 text-[9px] font-bold px-2 py-1 rounded-full flex items-center gap-1"><MdStar className="w-3 h-3" /> Featured</span>}
+                  <span className="bg-green-400 text-green-900 text-[9px] font-bold px-2 py-1 rounded-full">{resume.score}%</span>
                 </div>
 
-                {/* Mini Resume - White card overlay */}
                 <div className="absolute inset-0 m-5 bg-white/95 backdrop-blur-sm rounded-lg p-4 text-left flex flex-col shadow-lg">
                   <div className="text-center border-b border-gray-200 pb-2 mb-3">
                     <p className="text-xs font-bold text-gray-900 uppercase">{resume.sections.contact.fullName}</p>
-                    <p className="text-[8px] text-gray-500">{resume.sections.contact.fullName}</p>
+                    <p className="text-[8px] text-gray-500">{resume.role}</p>
                   </div>
                   <div className="flex-1 space-y-1">
                     {resume.sections.experience.slice(0, 3).map((exp: any, j: number) => (
@@ -3399,7 +3521,6 @@ const SampleResumes: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Hover Overlay */}
                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <div className="text-center text-white p-4">
                     <MdVisibility className="w-10 h-10 mx-auto mb-2" />
@@ -3413,9 +3534,7 @@ const SampleResumes: React.FC = () => {
               <div className="p-5">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{resume.industry}</span>
-                  <span className="flex items-center gap-1 text-sm font-bold text-green-600">
-                    <MdStar className="w-4 h-4" /> {resume.score}/100
-                  </span>
+                  <span className="flex items-center gap-1 text-sm font-bold text-green-600"><MdStar className="w-4 h-4" /> {resume.score}/100</span>
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-1 text-sm">{resume.title}</h3>
                 <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
@@ -3427,30 +3546,22 @@ const SampleResumes: React.FC = () => {
                     <span key={j} className="text-[9px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{exp.company}</span>
                   ))}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSelectedResume(resume)}
-                    className="flex-1 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <MdVisibility className="w-4 h-4" /> Preview
+                <div className="flex flex-wrap gap-1.5">
+                  <button onClick={() => handleAutoPopulate(resume)} className="flex-1 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors flex items-center justify-center gap-1.5 shadow-sm hover:shadow-md">
+                    <MdAutoAwesome className="w-4 h-4" /> Use This Template
                   </button>
                   <div className="flex gap-1">
-                    <button
-                      onClick={() => handleDownload(resume, 'pdf')}
-                      className="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-                      title="Download PDF"
-                    >
+                    <button onClick={() => handleDownload(resume, 'pdf')} className="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1" title="Download PDF">
                       <MdPictureAsPdf className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => handleDownload(resume, 'docx')}
-                      className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
-                      title="Download DOCX"
-                    >
+                    <button onClick={() => handleDownload(resume, 'docx')} className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-1" title="Download DOCX">
                       <MdDescription className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
+                <button onClick={() => setSelectedResume(resume)} className="w-full mt-2 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1">
+                  <MdVisibility className="w-3 h-3" /> Preview Full Resume
+                </button>
               </div>
             </motion.div>
           ))}
@@ -3483,15 +3594,13 @@ const SampleResumes: React.FC = () => {
                 </div>
               </div>
 
-              {/* Content */}
+              {/* Full Resume Content */}
               <div className="space-y-6">
-                {/* Summary */}
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Professional Summary</h3>
                   <p className="text-sm text-gray-700">{selectedResume.sections.summary.content}</p>
                 </div>
 
-                {/* Experience */}
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Professional Experience</h3>
                   <div className="space-y-4">
@@ -3504,9 +3613,7 @@ const SampleResumes: React.FC = () => {
                         <p className="text-xs text-gray-500">{exp.location}</p>
                         <ul className="mt-1 space-y-0.5">
                           {exp.achievements.slice(0, 3).map((ach: string, j: number) => (
-                            <li key={j} className="text-xs text-gray-600 flex items-start gap-1">
-                              <span className="text-blue-500">•</span> {ach}
-                            </li>
+                            <li key={j} className="text-xs text-gray-600 flex items-start gap-1"><span className="text-blue-500">•</span> {ach}</li>
                           ))}
                         </ul>
                       </div>
@@ -3514,111 +3621,57 @@ const SampleResumes: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Education */}
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Education</h3>
                   <div className="space-y-2">
                     {selectedResume.sections.education.map((edu: any, i: number) => (
                       <div key={i} className="flex justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{edu.degree} - {edu.field}</p>
-                          <p className="text-xs text-gray-500">{edu.institution}</p>
-                        </div>
+                        <div><p className="text-sm font-medium text-gray-900">{edu.degree} - {edu.field}</p><p className="text-xs text-gray-500">{edu.institution}</p></div>
                         <span className="text-xs text-gray-500">{edu.startDate} - {edu.endDate}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Skills */}
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Skills</h3>
                   <div className="space-y-1">
-                    <div>
-                      <span className="text-xs font-medium text-gray-600">Technical:</span>
-                      <span className="text-xs text-gray-500 ml-1">{selectedResume.sections.skills.technical.map((s: any) => s.name).join(', ')}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-medium text-gray-600">Soft Skills:</span>
-                      <span className="text-xs text-gray-500 ml-1">{selectedResume.sections.skills.soft.map((s: any) => s.name).join(', ')}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-medium text-gray-600">Tools:</span>
-                      <span className="text-xs text-gray-500 ml-1">{selectedResume.sections.skills.tools.map((s: any) => s.name).join(', ')}</span>
-                    </div>
+                    <div><span className="text-xs font-medium text-gray-600">Technical:</span> <span className="text-xs text-gray-500 ml-1">{selectedResume.sections.skills.technical.map((s: any) => s.name).join(', ')}</span></div>
+                    <div><span className="text-xs font-medium text-gray-600">Soft Skills:</span> <span className="text-xs text-gray-500 ml-1">{selectedResume.sections.skills.soft.map((s: any) => s.name).join(', ')}</span></div>
                   </div>
                 </div>
 
-                {/* Certifications */}
                 {selectedResume.sections.certifications && selectedResume.sections.certifications.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Certifications</h3>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedResume.sections.certifications.map((cert: any, i: number) => (
-                        <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{cert.name}</span>
-                      ))}
-                    </div>
+                  <div><h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Certifications</h3>
+                    <div className="flex flex-wrap gap-1">{selectedResume.sections.certifications.map((cert: any, i: number) => (<span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{cert.name}</span>))}</div>
                   </div>
                 )}
 
-                {/* Languages */}
                 {selectedResume.sections.languages && selectedResume.sections.languages.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Languages</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedResume.sections.languages.map((lang: any, i: number) => (
-                        <span key={i} className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">{lang.name} ({lang.proficiency})</span>
-                      ))}
-                    </div>
+                  <div><h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Languages</h3>
+                    <div className="flex flex-wrap gap-2">{selectedResume.sections.languages.map((lang: any, i: number) => (<span key={i} className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">{lang.name} ({lang.proficiency})</span>))}</div>
                   </div>
                 )}
 
-                {/* Referees */}
                 {selectedResume.sections.referees && selectedResume.sections.referees.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Referees</h3>
-                    <div className="space-y-2">
-                      {selectedResume.sections.referees.map((ref: any, i: number) => (
-                        <div key={i} className="border-l-2 border-gray-200 pl-3">
-                          <p className="text-sm font-medium text-gray-900">{ref.name}</p>
-                          <p className="text-xs text-gray-500">{ref.position} | {ref.organization}</p>
-                          <p className="text-xs text-gray-400">{ref.relationship}</p>
-                        </div>
-                      ))}
-                    </div>
+                  <div><h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Referees</h3>
+                    <div className="space-y-2">{selectedResume.sections.referees.map((ref: any, i: number) => (<div key={i} className="border-l-2 border-gray-200 pl-3"><p className="text-sm font-medium text-gray-900">{ref.name}</p><p className="text-xs text-gray-500">{ref.position} | {ref.organization}</p><p className="text-xs text-gray-400">{ref.relationship}</p></div>))}</div>
                   </div>
                 )}
               </div>
 
-              <div className="flex gap-3 mt-8">
-                <button
-                  onClick={() => setSelectedResume(null)}
-                  className="flex-1 py-3 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
-                >
-                  Close
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3 mt-8 pt-4 border-t border-gray-200">
+                <button onClick={() => { handleAutoPopulate(selectedResume); setSelectedResume(null); }} className="flex-1 min-w-[150px] py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-colors flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
+                  <MdAutoAwesome className="w-4 h-4" /> Use This Template
                 </button>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      handleDownload(selectedResume, 'pdf');
-                      setSelectedResume(null);
-                    }}
-                    className="px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2"
-                    disabled={downloading}
-                  >
-                    <MdPictureAsPdf className="w-4 h-4" /> PDF
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleDownload(selectedResume, 'docx');
-                      setSelectedResume(null);
-                    }}
-                    className="px-6 py-3 text-sm font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors flex items-center gap-2"
-                    disabled={downloading}
-                  >
-                    <MdDescription className="w-4 h-4" /> DOCX
-                  </button>
-                </div>
+                <button onClick={() => { handleDownload(selectedResume, 'pdf'); setSelectedResume(null); }} className="px-5 py-3 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2">
+                  <MdPictureAsPdf className="w-4 h-4" /> PDF
+                </button>
+                <button onClick={() => { handleDownload(selectedResume, 'docx'); setSelectedResume(null); }} className="px-5 py-3 text-sm font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors flex items-center gap-2">
+                  <MdDescription className="w-4 h-4" /> DOCX
+                </button>
+                <button onClick={() => setSelectedResume(null)} className="px-5 py-3 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">Close</button>
               </div>
             </div>
           </motion.div>
