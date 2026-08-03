@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MdDownload, MdStar, MdSearch, MdFilterList, MdVisibility, MdWork, MdSchool, MdVerified, MdTrendingUp, MdPeople, MdEmojiEvents, MdBusinessCenter, MdLightbulb, MdCheckCircle, MdAward, MdRocket, MdStars, MdFlashOn, MdCrown, MdInsights, MdLeaderboard, MdPsychology } from 'react-icons/md';
+import { MdDownload, MdStar, MdSearch, MdFilterList, MdVisibility, MdWork, MdSchool, MdVerified, MdTrendingUp, MdPeople, MdEmojiEvents, MdBusinessCenter, MdLightbulb, MdCheckCircle, MdAward, MdRocket, MdStars, MdFlashOn, MdInsights, MdLeaderboard, MdPsychology } from 'react-icons/md';
 import toast from 'react-hot-toast';
 
 // ============================================
@@ -477,7 +477,7 @@ https://ats.tradevisionpro.online
                   )}
                   {resume.premium && (
                     <span className="bg-purple-400 text-purple-900 text-[9px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
-                      <MdCrown className="w-3 h-3" /> Premium
+                      <MdStars className="w-3 h-3" /> Premium
                     </span>
                   )}
                   <span className="bg-green-400 text-green-900 text-[9px] font-bold px-2 py-1 rounded-full">
